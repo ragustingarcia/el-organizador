@@ -105,26 +105,6 @@ src/
 
 ---
 
-## Publicación en Chrome Web Store
-
-### Requisitos previos
-1. Cuenta de desarrollador configurada (one-time fee de USD 5)
-2. **Privacy policy** publicada en una URL pública (requerida por `<all_urls>`)
-3. Al menos **1 screenshot** de 1280x800 o 640x400
-4. **Ícono del store** de 128x128 (ya incluido en `public/icons/`)
-
-### Pasos
-1. `npm run build`
-2. Comprimir la carpeta `dist/` como ZIP
-3. En el [Developer Dashboard](https://chrome.google.com/webstore/devconsole), ir a **Elementos** → **Nuevo elemento**
-4. Subir el ZIP
-5. Completar la ficha: nombre, descripción, categoría (Productividad), screenshots
-6. En la sección de permisos, justificar `host_permissions` con:
-   > "La extensión necesita realizar peticiones HTTP (HEAD/GET) a las URLs almacenadas en los marcadores del usuario para verificar si los enlaces siguen activos. No se recolectan ni transmiten datos del usuario."
-7. Enviar a revisión
-
----
-
 ## Licencia
 
 MIT
