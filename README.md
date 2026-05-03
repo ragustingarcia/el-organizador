@@ -4,6 +4,32 @@
 
 Convierte una pila caótica de bookmarks en una biblioteca organizada y mantenida.
 
+[![Chrome Web Store](https://img.shields.io/chrome-web-store/v/laaakmnbceahaobdmgjdcgefhijimiae?label=Chrome%20Web%20Store&logo=googlechrome&logoColor=white&color=4285F4)](https://chromewebstore.google.com/detail/el-organizador/laaakmnbceahaobdmgjdcgefhijimiae)
+[![Rating](https://img.shields.io/chrome-web-store/rating/laaakmnbceahaobdmgjdcgefhijimiae?label=Rating&logo=googlechrome&logoColor=white&color=d4a843)](https://chromewebstore.google.com/detail/el-organizador/laaakmnbceahaobdmgjdcgefhijimiae)
+
+---
+
+## Instalación
+
+### Desde el Chrome Web Store (recomendado)
+
+👉 [**Instalar El Organizador**](https://chromewebstore.google.com/detail/el-organizador/laaakmnbceahaobdmgjdcgefhijimiae)
+
+### Desarrollo local
+
+```bash
+git clone https://github.com/ragustingarcia/el-organizador.git
+cd el-organizador
+npm install
+npm run build
+```
+
+Luego en Chrome:
+1. Abrí `chrome://extensions/`
+2. Activá **Modo de desarrollador**
+3. Clic en **Cargar extensión sin empaquetar**
+4. Seleccioná la carpeta `dist/`
+
 ---
 
 ## Funcionalidades
@@ -28,30 +54,11 @@ Nada se ejecuta sin tu confirmación. Revisás los resultados, ajustás lo que q
 
 ---
 
-## Instalación (desarrollo local)
-
-```bash
-git clone https://github.com/ragustingarcia/el-organizador.git
-cd el-organizador
-npm install
-npm run build
-```
-
-Luego en Chrome:
-1. Abrí `chrome://extensions/`
-2. Activá **Modo de desarrollador** (toggle arriba a la derecha)
-3. Clic en **Cargar extensión sin empaquetar**
-4. Seleccioná la carpeta `dist/`
-
-Para desarrollo con hot reload: `npm run dev` y cargá la carpeta raíz del proyecto (apuntando al `index.html` de desarrollo).
-
----
-
 ## Arquitectura
 
 ```
 public/
-├── manifest.json              # Manifest V3 con permisos bookmarks, sidePanel, storage
+├── manifest.json              # Manifest V3: bookmarks, sidePanel, storage
 ├── background.js              # Service worker: side panel + Vigía Mágico
 └── icons/                     # Iconos 16, 48, 128px
 
@@ -78,30 +85,31 @@ src/
 
 ---
 
-## Stack técnico
+## Stack
 
 - **React 19** + **TypeScript 5.9** + **Vite 8**
 - **Chrome Extension Manifest V3** (side panel API)
-- **chrome.storage.local** para persistir estado del Vigía
-- Sin dependencias externas de runtime (0 libs adicionales)
+- **chrome.storage.local** para persistencia del Vigía
+- Sin dependencias de runtime (0 libs externas)
 
 ---
 
 ## Permisos y seguridad
 
-| Permiso | Justificación |
+| Permiso | Uso |
 |---|---|
 | `bookmarks` | Leer, mover y renombrar marcadores |
 | `sidePanel` | Interfaz principal de la extensión |
-| `storage` | Persistir estado del Vigía Mágico entre sesiones |
-| `<all_urls>` (host) | Verificar el estado HTTP de cualquier URL guardada en los marcadores del usuario |
+| `storage` | Persistir estado del Vigía Mágico |
+| `<all_urls>` (host) | Verificar estado HTTP de las URLs guardadas en marcadores |
 
 ### Medidas de seguridad
-- **URL guard** (`url-guard.ts`): bloquea fetch a `file://`, `chrome://`, `chrome-extension://`, localhost, y rangos de IP privada (127.x, 10.x, 192.168.x, 172.16-31.x) antes de cualquier request.
-- **CSP explícito** en el manifest: `script-src 'self'; object-src 'self'`.
-- **Todas las llamadas** a `chrome.bookmarks.*` verifican `chrome.runtime.lastError`.
-- **Exclusión mutua** entre "mover a revisión" y "mover a carpeta sugerida" — nunca se ejecutan ambos sobre el mismo bookmark.
-- **Sin keywords personales** en el clasificador — solo reglas genéricas aptas para cualquier usuario.
+- **URL guard**: bloquea fetch a `file://`, `chrome://`, localhost, y rangos de IP privada antes de cualquier request.
+- **CSP explícito**: `script-src 'self'; object-src 'self'`.
+- **`chrome.runtime.lastError`** verificado en todas las llamadas a la API de bookmarks.
+- **Exclusión mutua** entre "mover a revisión" y "mover a carpeta sugerida".
+- **Sin keywords personales** en el clasificador — solo reglas genéricas.
+- **No recolecta ni transmite datos del usuario.**
 
 ---
 
@@ -113,4 +121,4 @@ MIT
 
 ## Autor
 
-**ragustingarcia** — [Chrome Web Store Developer](https://chrome.google.com/webstore/devconsole)
+**ragustingarcia** — [Chrome Web Store](https://chromewebstore.google.com/detail/el-organizador/laaakmnbceahaobdmgjdcgefhijimiae)
