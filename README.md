@@ -1,5 +1,7 @@
 # 🧙‍♂️ El Organizador
 
+![El Organizador — tu mago de favoritos](./public/assets/og-image.png)
+
 **Tu mago de favoritos.** Audita, limpia y reorganiza tus marcadores de Chrome desde un side panel con estética mágica.
 
 Convierte una pila caótica de bookmarks en una biblioteca organizada y mantenida.

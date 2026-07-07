@@ -1,0 +1,24 @@
+# El Organizador
+
+> Extensión de Chrome que audita, limpia y reorganiza tus marcadores desde un side panel con estética mágica.
+
+Versión LLM-friendly de El Organizador, por Rodolfo Agustín García.
+
+## About
+El Organizador es una extensión de Chrome (Manifest V3) que escanea tus marcadores, valida que los enlaces sigan vivos, sugiere carpetas temáticas y acorta títulos largos. Incluye "Vigía Mágico", un modo que sugiere nombre y carpeta para cada favorito nuevo apenas lo guardás. Nada se aplica sin confirmación del usuario. Creado por Rodolfo Agustín García (https://ragustingarcia.com/).
+
+## Features / Cómo funciona
+- Escaneo profundo: valida salud de enlaces (HEAD→GET, detecta redirects) y clasifica por URL, título y metadata de la página
+- Limpieza de títulos: acorta títulos largos quedándose con el segmento más significativo
+- Organización inteligente: sugiere carpetas temáticas editables antes de aplicar
+- Vigía Mágico: sugiere nombre y carpeta destino para cada favorito nuevo automáticamente
+- Revisión manual: agrupa enlaces rotos o dudosos para decidir qué hacer con ellos
+
+## Stack
+React 19, TypeScript, Vite, Chrome Extension Manifest V3 (side panel API). Sin dependencias de runtime.
+
+## Contact
+- Autor: https://ragustingarcia.com/
+- GitHub: https://github.com/ragustingarcia
+- Repo: https://github.com/ragustingarcia/el-organizador
+- Chrome Web Store: https://chromewebstore.google.com/detail/el-organizador/laaakmnbceahaobdmgjdcgefhijimiae
