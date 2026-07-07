@@ -3,6 +3,17 @@
   "private": true,
   "version": "1.2.0",
   "type": "module",
+  "description": "Tu mago de favoritos. Audita, limpia y reorganiza tus marcadores de Chrome.",
+  "author": {
+    "name": "Rodolfo Agustín García",
+    "url": "https://ragustingarcia.com"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ragustingarcia/el-organizador.git"
+  },
+  "homepage": "https://chromewebstore.google.com/detail/el-organizador/laaakmnbceahaobdmgjdcgefhijimiae",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build && vite build --config vite.background.config.ts",

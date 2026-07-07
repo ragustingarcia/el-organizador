@@ -45,3 +45,5 @@ Si se realizan cambios a esta política de privacidad, se actualizará este docu
 
 Para consultas sobre privacidad, podés abrir un issue en el repositorio:
 https://github.com/ragustingarcia/el-organizador/issues
+
+Desarrollado por [Rodolfo Agustín García](https://ragustingarcia.com/).

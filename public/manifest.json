@@ -3,6 +3,8 @@
   "name": "El Organizador",
   "version": "1.2.0",
   "description": "Tu mago de favoritos. Audita, limpia y reorganiza tus marcadores.",
+  "author": "Rodolfo Agustín García",
+  "homepage_url": "https://ragustingarcia.com",
   "permissions": [
     "bookmarks",
     "sidePanel",

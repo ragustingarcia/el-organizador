@@ -7,6 +7,7 @@ Convierte una pila caótica de bookmarks en una biblioteca organizada y mantenid
 [![Chrome Web Store](https://img.shields.io/chrome-web-store/v/laaakmnbceahaobdmgjdcgefhijimiae?label=Chrome%20Web%20Store&logo=googlechrome&logoColor=white&color=4285F4)](https://chromewebstore.google.com/detail/el-organizador/laaakmnbceahaobdmgjdcgefhijimiae)
 [![Rating](https://img.shields.io/chrome-web-store/rating/laaakmnbceahaobdmgjdcgefhijimiae?label=Rating&logo=googlechrome&logoColor=white&color=d4a843)](https://chromewebstore.google.com/detail/el-organizador/laaakmnbceahaobdmgjdcgefhijimiae)
 [![CI](https://github.com/ragustingarcia/el-organizador/actions/workflows/ci.yml/badge.svg)](https://github.com/ragustingarcia/el-organizador/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 
 ---
 
@@ -118,10 +119,12 @@ src/
 
 ## Licencia
 
-MIT
+[MIT](./LICENSE)
 
 ---
 
 ## Autor
 
-**ragustingarcia** — [Chrome Web Store](https://chromewebstore.google.com/detail/el-organizador/laaakmnbceahaobdmgjdcgefhijimiae)
+**Rodolfo Agustín García** ([@ragustingarcia](https://github.com/ragustingarcia)) — [ragustingarcia.com](https://ragustingarcia.com/)
+
+🧙 [El Organizador en la Chrome Web Store](https://chromewebstore.google.com/detail/el-organizador/laaakmnbceahaobdmgjdcgefhijimiae)
