@@ -202,8 +202,14 @@ export default function App() {
       const reviewSet = new Set<string>();
       const moveSet = new Set<string>();
 
+      // A bookmark only has a trustworthy healthStatus if some fetch actually
+      // happened (requested validation, or organize needed the page body).
+      // With neither flag on (e.g. only "acortar títulos"), nothing was
+      // checked, so nothing should land in "para revisión".
+      const wasChecked = scanOpts.validateLinks || scanOpts.organize;
+
       for (const bm of results) {
-        if (['dead', 'timeout', 'unverified', 'blocked'].includes(bm.healthStatus)) {
+        if (wasChecked && ['dead', 'timeout', 'unverified', 'blocked'].includes(bm.healthStatus)) {
           reviewSet.add(bm.id);
         } else if (bm.suggestedFolder) {
           moveSet.add(bm.id);
@@ -264,10 +270,10 @@ export default function App() {
           await moveBookmark(bm.id, folderId);
         }
 
-        if (
-          actions.renameTitles &&
-          (bm.healthStatus === 'alive' || bm.healthStatus === 'redirected')
-        ) {
+        // Renaming is a local text transform — it doesn't depend on the
+        // link's health. Bookmarks sent to manual review already hit the
+        // `continue` above, so anything reaching this line is fair game.
+        if (actions.renameTitles) {
           const shorter = suggestShortTitle(bm.originalTitle);
           if (shorter !== bm.originalTitle) {
             await updateBookmarkTitle(bm.id, shorter);

@@ -141,7 +141,10 @@ export async function scanBookmark(
 
   const { health, body } = await fetchUrl(bookmark.originalUrl, needsBody, signal);
 
-  const healthStatus = options.validateLinks ? health : 'unverified';
+  // The fetch already happened (needed for validation and/or classification),
+  // so its real result is always trustworthy — it must not be overwritten to
+  // 'unverified' just because the user didn't explicitly ask to validate.
+  const healthStatus = health;
 
   // Only classify healthy bookmarks
   let suggestedFolder: string | undefined;

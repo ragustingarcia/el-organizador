@@ -25,13 +25,19 @@ export default function ResultsPanel({
   onToggleMove,
   onFolderChange,
 }: Props) {
+  // Mirrors the `wasChecked` guard in App.tsx: healthStatus is only
+  // trustworthy if a fetch actually ran (validation and/or organize).
+  const wasChecked = showValidation || showOrganize;
+
   const alive = bookmarks.filter(
     (b) => b.healthStatus === 'alive' || b.healthStatus === 'redirected',
   );
 
-  const problematic = bookmarks.filter((b) =>
-    ['dead', 'timeout', 'unverified', 'blocked'].includes(b.healthStatus),
-  );
+  const problematic = wasChecked
+    ? bookmarks.filter((b) =>
+        ['dead', 'timeout', 'unverified', 'blocked'].includes(b.healthStatus),
+      )
+    : [];
 
   const dubious = problematic.filter(
     (b) => b.healthStatus === 'unverified' || b.healthStatus === 'blocked',

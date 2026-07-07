@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite'
+import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 
 export default defineConfig({
@@ -13,5 +13,9 @@ export default defineConfig({
         assetFileNames: 'assets/[name].[ext]',
       },
     },
+  },
+  test: {
+    // Everything under test is pure logic (no chrome.* APIs, no DOM).
+    environment: 'node',
   },
 })

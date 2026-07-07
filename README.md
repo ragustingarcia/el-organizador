@@ -6,6 +6,7 @@ Convierte una pila caótica de bookmarks en una biblioteca organizada y mantenid
 
 [![Chrome Web Store](https://img.shields.io/chrome-web-store/v/laaakmnbceahaobdmgjdcgefhijimiae?label=Chrome%20Web%20Store&logo=googlechrome&logoColor=white&color=4285F4)](https://chromewebstore.google.com/detail/el-organizador/laaakmnbceahaobdmgjdcgefhijimiae)
 [![Rating](https://img.shields.io/chrome-web-store/rating/laaakmnbceahaobdmgjdcgefhijimiae?label=Rating&logo=googlechrome&logoColor=white&color=d4a843)](https://chromewebstore.google.com/detail/el-organizador/laaakmnbceahaobdmgjdcgefhijimiae)
+[![CI](https://github.com/ragustingarcia/el-organizador/actions/workflows/ci.yml/badge.svg)](https://github.com/ragustingarcia/el-organizador/actions/workflows/ci.yml)
 
 ---
 
@@ -59,12 +60,14 @@ Nada se ejecuta sin tu confirmación. Revisás los resultados, ajustás lo que q
 ```
 public/
 ├── manifest.json              # Manifest V3: bookmarks, sidePanel, storage
-├── background.js              # Service worker: side panel + Vigía Mágico
 └── icons/                     # Iconos 16, 48, 128px
 
 src/
 ├── App.tsx                    # Orquestador con state machine + integración Vigía
 ├── main.tsx                   # Entry point React
+├── background.ts              # Service worker: side panel + Vigía Mágico
+│                               # (bundle IIFE aparte, ver vite.background.config.ts;
+│                               #  reusa classifier.ts/modifier.ts, no los duplica)
 ├── components/
 │   ├── ScanConfig.tsx         # Selector de carpeta + opciones de conjuros
 │   ├── ProgressBar.tsx        # Barra de progreso con gradiente mágico
