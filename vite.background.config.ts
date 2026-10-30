@@ -9,6 +9,7 @@ import { defineConfig } from 'vite'
 // dependency-free (no @types/node needed for `__dirname`).
 export default defineConfig({
   build: {
+    copyPublicDir: false,
     outDir: 'dist',
     emptyOutDir: false,
     lib: {

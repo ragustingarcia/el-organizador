@@ -1,83 +1,74 @@
-// src/background.ts — El Organizador service worker
-// Handles: side panel open + Vigía Mágico (new bookmark watcher)
-//
-// Bundled standalone (IIFE, see vite.background.config.ts) into
-// dist/background.js. Reuses the same classifier/modifier rules as the
-// side panel instead of duplicating them, so the two can no longer drift.
-
+// Service worker: suggestions are serialized to avoid losing rapid bookmark imports.
 import { classifyBookmark } from './utils/classifier';
 import { suggestShortTitle } from './utils/modifier';
 import type { Suggestion } from './components/SuggestionCard';
 
-// ---- Side panel ----
-chrome.sidePanel
-  .setPanelBehavior({ openPanelOnActionClick: true })
-  .catch((err) => console.error('[El Organizador] sidePanel:', err));
+chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true })
+  .catch(err => console.error('[El Organizador] sidePanel:', err));
 
-// ---- Vigía Mágico: New bookmark watcher ----
+chrome.storage.local.setAccessLevel({ accessLevel: 'TRUSTED_CONTEXTS' })
+  .catch(err => console.error('[El Organizador] storage:', err));
+
+let work: Promise<unknown> = Promise.resolve();
+function serialize<T>(task: () => Promise<T>): Promise<T> {
+  const result = work.then(task);
+  work = result.catch(() => {});
+  return result;
+}
+
+async function suggestions(): Promise<Suggestion[]> {
+  const data = await chrome.storage.local.get<{ pendingSuggestions?: Suggestion[]; pendingSuggestion?: Suggestion }>(['pendingSuggestions', 'pendingSuggestion']);
+  return data.pendingSuggestions ?? (data.pendingSuggestion ? [data.pendingSuggestion] : []);
+}
+
+let importing = false;
+chrome.bookmarks.onImportBegan.addListener(() => { importing = true; });
+chrome.bookmarks.onImportEnded.addListener(() => { importing = false; });
 
 chrome.bookmarks.onCreated.addListener((id, bookmark) => {
-  const url = bookmark.url;
-  if (!url) return; // Only act on actual URLs, not folders
-
-  chrome.storage.local.get(['vigiaEnabled'], (data) => {
-    if (chrome.runtime.lastError || !data.vigiaEnabled) return;
-
-    const suggestedTitle = suggestShortTitle(bookmark.title);
-    // No page metadata available at bookmark-creation time (no fetch here),
-    // same rules as a manual scan otherwise.
-    const suggestedFolder = classifyBookmark(bookmark.title, url, '');
-
-    const suggestion: Suggestion = {
-      id,
-      originalTitle: bookmark.title,
-      originalUrl: url,
-      suggestedTitle,
-      suggestedFolder,
-      parentId: bookmark.parentId ?? '',
-      timestamp: Date.now(),
-    };
-
-    // Store the suggestion for the side panel to pick up
-    chrome.storage.local.set({ pendingSuggestion: suggestion }, () => {
-      if (chrome.runtime.lastError) {
-        console.error('[Vigía]', chrome.runtime.lastError.message);
-        return;
-      }
-      // Try to open the side panel so the user sees the suggestion.
-      // sidePanel.open() requires a concrete windowId — the service worker
-      // has no window of its own, so resolve the active one first (falls
-      // back to the last-focused window, which is what we want here).
-      chrome.windows.getCurrent((win) => {
-        if (chrome.runtime.lastError || win.id === undefined) return;
-        chrome.sidePanel.open({ windowId: win.id }).catch(() => {
-          // Side panel might already be open, that's fine
-        });
-      });
+  if (importing || !bookmark.url || bookmark.unmodifiable) return;
+  void serialize(async () => {
+    const { vigiaEnabled } = await chrome.storage.local.get('vigiaEnabled');
+    if (!vigiaEnabled) return;
+    const pending = await suggestions();
+    pending.push({
+      id, originalTitle: bookmark.title, originalUrl: bookmark.url!,
+      suggestedTitle: suggestShortTitle(bookmark.title),
+      suggestedFolder: classifyBookmark(bookmark.title, bookmark.url!, ''),
+      parentId: bookmark.parentId ?? '', timestamp: Date.now(),
     });
-  });
+    await chrome.storage.local.set({ pendingSuggestions: pending });
+    await chrome.storage.local.remove('pendingSuggestion');
+    // Opening automatically requires a user gesture; the action opens the panel.
+  }).catch(err => console.error('[Vigía] No se pudo guardar la sugerencia:', err));
 });
 
-// Respond to messages from the side panel
-chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
-  if (msg.type === 'GET_VIGIA_STATUS') {
-    chrome.storage.local.get(['vigiaEnabled'], (data) => {
-      sendResponse({ enabled: !!data.vigiaEnabled });
-    });
-    return true; // async response
-  }
+chrome.bookmarks.onRemoved.addListener(id => {
+  void serialize(async () => {
+    const pending = await suggestions();
+    await chrome.storage.local.set({ pendingSuggestions: pending.filter(item => item.id !== id) });
+    await chrome.storage.local.remove('pendingSuggestion');
+  }).catch(err => console.error('[Vigía]', err));
+});
 
-  if (msg.type === 'SET_VIGIA_STATUS') {
-    chrome.storage.local.set({ vigiaEnabled: msg.enabled }, () => {
-      sendResponse({ ok: true });
-    });
-    return true;
-  }
-
-  if (msg.type === 'CLEAR_SUGGESTION') {
-    chrome.storage.local.remove('pendingSuggestion', () => {
-      sendResponse({ ok: true });
-    });
-    return true;
-  }
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (sender.id !== chrome.runtime.id || !msg || typeof msg.type !== 'string') return;
+  if (!['GET_VIGIA_STATUS', 'SET_VIGIA_STATUS', 'CLEAR_SUGGESTION'].includes(msg.type)) return;
+  void serialize(async () => {
+    if (msg.type === 'GET_VIGIA_STATUS') {
+      const data = await chrome.storage.local.get('vigiaEnabled');
+      return { enabled: !!data.vigiaEnabled };
+    }
+    if (msg.type === 'SET_VIGIA_STATUS') {
+      if (typeof msg.enabled !== 'boolean') throw new Error('Estado de Vigía inválido.');
+      await chrome.storage.local.set({ vigiaEnabled: msg.enabled });
+    } else {
+      if (typeof msg.id !== 'string') throw new Error('Sugerencia inválida.');
+      const pending = await suggestions();
+      await chrome.storage.local.set({ pendingSuggestions: pending.filter(item => item.id !== msg.id) });
+      await chrome.storage.local.remove('pendingSuggestion');
+    }
+    return { ok: true };
+  }).then(sendResponse, err => sendResponse({ error: String(err) }));
+  return true;
 });

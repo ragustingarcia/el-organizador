@@ -20,8 +20,8 @@ describe('classifyBookmark', () => {
     ).toBe('📚 Lectura y Educación');
   });
 
-  it('falls back to the capitalized domain when no rule matches', () => {
-    expect(classifyBookmark('', 'https://coolsite.io/page', '')).toBe('📁 Coolsite');
+  it('uses one manual fallback instead of creating a folder per unknown domain', () => {
+    expect(classifyBookmark('', 'https://coolsite.io/page', '')).toBe('📁 Varios');
   });
 
   it('falls back to "Varios" for generic subdomains', () => {
@@ -57,4 +57,17 @@ describe('extractMetadata', () => {
   it('returns a blank-ish string when neither tag is present', () => {
     expect(extractMetadata('<html><body>no head tags here</body></html>')).toBe(' ');
   });
+});
+
+it('does not match keywords embedded in unrelated words or URL queries', () => {
+  expect(classifyBookmark('Transaction', 'https://example.com/?next=github', '')).toBe('📁 Varios');
+  expect(classifyBookmark('Reaction', 'https://example.com', '')).toBe('📁 Varios');
+});
+it('weighs multiple relevant words instead of taking the first matching category', () => {
+  expect(classifyBookmark('AWS hosting deploy tutorial', 'https://example.com', '')).toBe('☁️ Cloud y Servicios');
+});
+
+it('bounds retained metadata for large libraries', () => {
+  const html = `<title>${'a'.repeat(20_000)}</title><meta name="description" content="${'b'.repeat(20_000)}">`;
+  expect(extractMetadata(html)).toHaveLength(2001);
 });

@@ -7,6 +7,7 @@ import OrganizeList from './OrganizeList';
 type Props = {
   bookmarks: AnalyzedBookmark[];
   showValidation: boolean;
+  showNetwork: boolean;
   showOrganize: boolean;
   selectedForReview: Set<string>;
   selectedForMove: Set<string>;
@@ -18,6 +19,7 @@ type Props = {
 export default function ResultsPanel({
   bookmarks,
   showValidation,
+  showNetwork,
   showOrganize,
   selectedForReview,
   selectedForMove,
@@ -27,34 +29,31 @@ export default function ResultsPanel({
 }: Props) {
   // Mirrors the `wasChecked` guard in App.tsx: healthStatus is only
   // trustworthy if a fetch actually ran (validation and/or organize).
-  const wasChecked = showValidation || showOrganize;
+  const wasChecked = showNetwork;
 
   const alive = bookmarks.filter(
-    (b) => b.healthStatus === 'alive' || b.healthStatus === 'redirected',
+    (b) => b.healthStatus === 'alive',
   );
 
-  const problematic = wasChecked
-    ? bookmarks.filter((b) =>
-        ['dead', 'timeout', 'unverified', 'blocked'].includes(b.healthStatus),
-      )
-    : [];
+  const problematic = bookmarks.filter(b => !!b.duplicateOf || (wasChecked &&
+    ['dead', 'timeout', 'unverified', 'blocked', 'redirected'].includes(b.healthStatus)));
 
   const dubious = problematic.filter(
-    (b) => b.healthStatus === 'unverified' || b.healthStatus === 'blocked',
+    (b) => b.healthStatus === 'unverified' || b.healthStatus === 'blocked' || b.healthStatus === 'redirected' || b.healthStatus === 'timeout',
   );
 
   const broken = problematic.filter(
-    (b) => b.healthStatus === 'dead' || b.healthStatus === 'timeout',
+    (b) => b.healthStatus === 'dead',
   );
 
   const organizable = bookmarks.filter(
     (b) =>
       b.suggestedFolder &&
-      !['dead', 'timeout', 'unverified', 'blocked'].includes(b.healthStatus),
+      !['dead', 'timeout', 'unverified', 'blocked', 'redirected'].includes(b.healthStatus),
   );
 
   const nothingToDo =
-    problematic.length === 0 &&
+    bookmarks.length > 0 && wasChecked && problematic.length === 0 &&
     (!showOrganize || organizable.length === 0);
 
   return (
@@ -80,11 +79,13 @@ export default function ResultsPanel({
         </div>
       )}
 
+      <p>{bookmarks.length} favoritos analizados · {bookmarks.filter(b => b.duplicateOf).length} copias duplicadas exactas. Ningún favorito se elimina.</p>
+      {!wasChecked && <p>No se verificó el estado de los enlaces.</p>}
       {/* All clean */}
       {nothingToDo && (
         <div className="empty-state">
           <p>✨ ¡Todo en orden!</p>
-          <p>No se encontraron enlaces problemáticos. La biblioteca está limpia.</p>
+          <p>No se encontraron enlaces problemáticos en esta consulta. Revisá también los cambios de nombre propuestos.</p>
         </div>
       )}
 

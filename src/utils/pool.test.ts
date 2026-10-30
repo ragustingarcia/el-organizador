@@ -67,3 +67,7 @@ describe('poolMap', () => {
     await expect(promise).rejects.toMatchObject({ name: 'AbortError' });
   });
 });
+
+it.each([0, -1, 1.5, Number.NaN])('rejects invalid worker count %s instead of silently returning empty slots', async concurrency => {
+  await expect(poolMap([1], async value => value, concurrency)).rejects.toThrow(RangeError);
+});

@@ -5,6 +5,7 @@ import type { BookmarkFolder } from '../utils/bookmarks';
 export type ScanActions = {
   validateLinks: boolean;
   renameTitles: boolean;
+  enrichMetadata: boolean;
   organize: 'none' | 'suggest_folders';
 };
 
@@ -74,6 +75,12 @@ export default function ScanConfig({
           Acortar títulos largos (ej: quitando "- Home")
         </label>
 
+        <label className="checkbox-row">
+          <input type="checkbox" checked={actions.enrichMetadata} disabled={disabled || actions.organize === 'none'}
+            onChange={e => onActionsChange({ ...actions, enrichMetadata: e.target.checked })} />
+          Consultar metadatos web para clasificar (opcional)
+        </label>
+        <p className="sub-label">La clasificación usa títulos y URLs en tu dispositivo. Verificar enlaces o consultar metadatos contacta los sitios guardados, sin cookies. Las redirecciones quedan para revisión.</p>
         <div className="sub-option">
           <span className="sub-label">Organización de carpetas:</span>
           <select

@@ -2,131 +2,78 @@
 
 ![El Organizador — tu mago de favoritos](./public/assets/og-image.png)
 
-**Tu mago de favoritos.** Audita, limpia y reorganiza tus marcadores de Chrome desde un side panel con estética mágica.
-
-Convierte una pila caótica de bookmarks en una biblioteca organizada y mantenida.
+**Tu mago de favoritos.** Organiza los marcadores de Chrome desde un panel lateral: clasificación local, detección de duplicados y cambios revisables con recuperación.
 
 [![Chrome Web Store](https://img.shields.io/chrome-web-store/v/laaakmnbceahaobdmgjdcgefhijimiae?label=Chrome%20Web%20Store&logo=googlechrome&logoColor=white&color=4285F4)](https://chromewebstore.google.com/detail/el-organizador/laaakmnbceahaobdmgjdcgefhijimiae)
-[![Rating](https://img.shields.io/chrome-web-store/rating/laaakmnbceahaobdmgjdcgefhijimiae?label=Rating&logo=googlechrome&logoColor=white&color=d4a843)](https://chromewebstore.google.com/detail/el-organizador/laaakmnbceahaobdmgjdcgefhijimiae)
 [![CI](https://github.com/ragustingarcia/el-organizador/actions/workflows/ci.yml/badge.svg)](https://github.com/ragustingarcia/el-organizador/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 
----
-
 ## Instalación
 
-### Desde el Chrome Web Store (recomendado)
+La versión publicada está en [Chrome Web Store](https://chromewebstore.google.com/detail/el-organizador/laaakmnbceahaobdmgjdcgefhijimiae). El código de esta rama prepara la versión **1.3.0**; su presencia en GitHub no implica que esa versión ya esté publicada en la tienda.
 
-👉 [**Instalar El Organizador**](https://chromewebstore.google.com/detail/el-organizador/laaakmnbceahaobdmgjdcgefhijimiae)
-
-### Desarrollo local
+Para desarrollo (Node 22 actualizado):
 
 ```bash
-git clone https://github.com/ragustingarcia/el-organizador.git
-cd el-organizador
-npm install
+npm ci
+npm test
+npm run lint
 npm run build
 ```
 
-Luego en Chrome:
-1. Abrí `chrome://extensions/`
-2. Activá **Modo de desarrollador**
-3. Clic en **Cargar extensión sin empaquetar**
-4. Seleccioná la carpeta `dist/`
+En Chrome 114 o posterior, abrí `chrome://extensions/`, activá el modo de desarrollador y cargá la carpeta `dist/` como extensión sin empaquetar.
 
----
+## Organización y limpieza
 
-## Funcionalidades
+1. Elegí una carpeta o todo el árbol. Por defecto, la clasificación usa solamente títulos y URLs locales.
+2. Revisá las sugerencias. Las categorías desconocidas quedan en “Varios”, sin seleccionar; no se crea una carpeta por cada dominio. Las carpetas temáticas existentes se reutilizan y los favoritos ya clasificados no generan subcarpetas iguales.
+3. Los duplicados se detectan por URL normalizada, conservando parámetros y fragmentos. Podés mover las copias que selecciones a “📥 Revisión Manual”. **No se elimina ningún marcador.**
+4. El renombrado está desactivado por defecto. Si lo activás, solo quita espacios sobrantes y sufijos genéricos como “Home”, “Inicio” o “Sitio oficial”. Conserva segmentos descriptivos como “AWS | Services - S3”.
+5. El detalle previo muestra los nombres y destinos que se aplicarán. La configuración queda fija hasta volver a escanear.
+6. Antes de modificar favoritos se guarda una copia local. Podés deshacer la última limpieza, incluso si quedó incompleta. Para iniciar otra aplicación, primero deshacé la anterior o elegí conservar sus cambios y descartar esa copia.
 
-### 🔮 Escaneo profundo
-Seleccioná una carpeta (o todo el árbol) y el mago analiza cada marcador:
-- **Validación de enlaces** — Verifica que cada URL siga viva con fallback HEAD → GET. Detecta redirects comparando la URL final. Marca como "dudoso" lo que no puede confirmar (nunca borra por error).
-- **Limpieza de títulos** — Acorta títulos con separadores comunes (" - ", " | ", " : ") quedándose con el segmento más significativo.
-- **Organización inteligente** — Clasifica cada bookmark por su URL, título y metadatos de la página (title + meta description) en carpetas temáticas. Las sugerencias son editables antes de aplicar.
+Al escanear todo el árbol se conserva la raíz real de cada marcador (incluidas las raíces locales o de cuenta); no se presupone el identificador `1`. En una carpeta seleccionada, las nuevas categorías se crean dentro de ese ámbito. Las carpetas administradas no se editan. La recuperación conserva las carpetas nuevas vacías.
 
-### 📥 Revisión manual
-Los enlaces rotos, con timeout o dudosos se agrupan para que decidas qué hacer. Podés moverlos a una carpeta "📥 Revisión Manual" con un clic.
+Las listas muestran 50 filas por página para mantener manejables bibliotecas grandes.
 
-### 👁️ Vigía Mágico
-Modo opcional que mantiene al mago "despierto". Cada vez que guardás un nuevo favorito:
-1. El service worker detecta el evento `bookmarks.onCreated`
-2. Clasifica la URL y sugiere un nombre corto + carpeta destino
-3. Te muestra la sugerencia en el side panel para que la aceptes, edites o descartes
+## Comprobación de enlaces opcional
 
-### 🪄 Aplicación asistida
-Nada se ejecuta sin tu confirmación. Revisás los resultados, ajustás lo que quieras, y recién ahí "conjurás" los cambios.
+“Verificar que los enlaces sigan vivos” y “Consultar metadatos web” contactan directamente los sitios guardados. Están desactivados por defecto. No se envían cookies ni referrer. Los metadatos solo se consultan al habilitar esa opción junto con la organización.
 
----
+- Se comparte una consulta por URL HTTP dentro de cada escaneo; los fragmentos no se envían al servidor.
+- HEAD se utiliza cuando no hacen falta metadatos. GET solo lo reemplaza si HEAD no es compatible (405/501).
+- La lectura de HTML se limita a 60.000 bytes entregados al analizador y se cancela al alcanzar el límite o cerrar `head`. No se leen archivos binarios para clasificar.
+- El plazo de ocho segundos cubre tanto cabeceras como cuerpo. El usuario puede cancelar.
+- Las redirecciones no se siguen: su destino no se verifica y quedan para revisión. Un timeout o una redirección no se presentan como un enlace caído confirmado.
+- Ningún resultado problemático se selecciona automáticamente para mover.
+
+## Vigía Mágico
+
+Es opcional y clasifica localmente los favoritos nuevos. Las sugerencias se guardan en una cola, se muestran de a una y solo se retira la sugerencia aceptada o descartada. Durante una importación masiva se omiten sugerencias individuales; los importados se pueden revisar con un escaneo.
+
+El botón de la extensión abre el panel. El Vigía no intenta abrirlo automáticamente sin un gesto del usuario.
+
+## Seguridad y privacidad
+
+Los permisos son `bookmarks`, `sidePanel`, `storage` y acceso HTTP/HTTPS para las consultas opcionales. No hay servidor propio, analítica ni código remoto. React y React DOM se incluyen en el paquete; no se cargan desde una CDN.
+
+El guard de URLs rechaza esquemas ajenos a HTTP/HTTPS, credenciales incrustadas, nombres locales y rangos IP locales/especiales conocidos. **El filtro no resuelve DNS ni garantiza bloquear DNS rebinding.** La opción local permite organizar sin consultar sitios web.
+
+Las escrituras se serializan entre paneles con Web Locks, comprueban errores de Chrome y rechazan marcadores que cambiaron desde el escaneo. La recuperación se detiene ante conflictos en título, URL o carpeta y conserva la copia. Las APIs de Chrome no ofrecen una transacción atómica frente a cambios externos o sincronización concurrente.
+
+Consultá la [política de privacidad](./PRIVACY_POLICY.md), el [informe de auditoría](./docs/AUDITORIA-1.3.0.md) y el [registro de cambios](./CHANGELOG.md).
 
 ## Arquitectura
 
-```
-public/
-├── manifest.json              # Manifest V3: bookmarks, sidePanel, storage
-└── icons/                     # Iconos 16, 48, 128px
+- `src/App.tsx`: configuración, selección, vista previa y recuperación.
+- `src/background.ts`: panel lateral y cola del Vigía.
+- `src/utils/scanner.ts`: consultas limitadas, cancelación y caché de un escaneo.
+- `src/utils/classifier.ts`: categorías con reglas locales y límites de palabra.
+- `src/utils/change-plan.ts`: duplicados y plan explícito de cambios.
+- `src/utils/recovery.ts`: validación, aplicación y recuperación persistida.
+- `src/utils/bookmarks.ts`: lectura del árbol y exclusión de contenido administrado.
+- `src/components/PagedList.tsx`: presentación paginada.
 
-src/
-├── App.tsx                    # Orquestador con state machine + integración Vigía
-├── main.tsx                   # Entry point React
-├── background.ts              # Service worker: side panel + Vigía Mágico
-│                               # (bundle IIFE aparte, ver vite.background.config.ts;
-│                               #  reusa classifier.ts/modifier.ts, no los duplica)
-├── components/
-│   ├── ScanConfig.tsx         # Selector de carpeta + opciones de conjuros
-│   ├── ProgressBar.tsx        # Barra de progreso con gradiente mágico
-│   ├── ResultsPanel.tsx       # Panel de resultados (compone Review + Organize)
-│   ├── ReviewList.tsx         # Lista de enlaces problemáticos
-│   ├── OrganizeList.tsx       # Sugerencias de carpetas editables
-│   └── SuggestionCard.tsx     # Card del Vigía para nuevos favoritos
-├── utils/
-│   ├── bookmarks.ts           # Chrome Bookmarks API (getSubTree para filtrado por ID)
-│   ├── scanner.ts             # Fetch unificado: salud + clasificación en 1 request
-│   ├── classifier.ts          # Reglas genéricas de clasificación por keywords
-│   ├── modifier.ts            # CRUD de bookmarks (move, rename, create folder)
-│   ├── pool.ts                # Pool de concurrencia con cancelación via AbortController
-│   └── url-guard.ts           # Sanitización de URLs (bloquea IPs privadas, chrome://)
-└── styles/
-    └── app.css                # Tema mago: púrpura + dorado, dark/light mode
-```
+## Licencia y autor
 
----
-
-## Stack
-
-- **React 19** + **TypeScript 5.9** + **Vite 8**
-- **Chrome Extension Manifest V3** (side panel API)
-- **chrome.storage.local** para persistencia del Vigía
-- Sin dependencias de runtime (0 libs externas)
-
----
-
-## Permisos y seguridad
-
-| Permiso | Uso |
-|---|---|
-| `bookmarks` | Leer, mover y renombrar marcadores |
-| `sidePanel` | Interfaz principal de la extensión |
-| `storage` | Persistir estado del Vigía Mágico |
-| `<all_urls>` (host) | Verificar estado HTTP de las URLs guardadas en marcadores |
-
-### Medidas de seguridad
-- **URL guard**: bloquea fetch a `file://`, `chrome://`, localhost, y rangos de IP privada antes de cualquier request.
-- **CSP explícito**: `script-src 'self'; object-src 'self'`.
-- **`chrome.runtime.lastError`** verificado en todas las llamadas a la API de bookmarks.
-- **Exclusión mutua** entre "mover a revisión" y "mover a carpeta sugerida".
-- **Sin keywords personales** en el clasificador — solo reglas genéricas.
-- **No recolecta ni transmite datos del usuario.**
-
----
-
-## Licencia
-
-[MIT](./LICENSE)
-
----
-
-## Autor
-
-**Rodolfo Agustín García** ([@ragustingarcia](https://github.com/ragustingarcia)) — [ragustingarcia.com](https://ragustingarcia.com/)
-
-🧙 [El Organizador en la Chrome Web Store](https://chromewebstore.google.com/detail/el-organizador/laaakmnbceahaobdmgjdcgefhijimiae)
+[MIT](./LICENSE). **Rodolfo Agustín García** ([@ragustingarcia](https://github.com/ragustingarcia)) — [ragustingarcia.com](https://ragustingarcia.com/).

@@ -96,6 +96,15 @@ const RULES: { folder: string; keywords: string[] }[] = [
   },
 ];
 
+const normalize = (value: string) => value.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+const COMPILED_RULES = RULES.map(rule => ({
+  folder: rule.folder,
+  patterns: rule.keywords.map(keyword => {
+    const escaped = normalize(keyword).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp(`(^|[^a-z0-9])${escaped}($|[^a-z0-9])`);
+  }),
+}));
+
 /**
  * Extracts <title> and <meta description> from raw HTML.
  * Returns a lowercase string combining both.
@@ -109,37 +118,35 @@ export function extractMetadata(html: string): string {
   const pageTitle = titleMatch?.[1] ?? '';
   const pageDesc = descMatch?.[1] ?? '';
 
-  return `${pageTitle} ${pageDesc}`.toLowerCase();
+  // Completed scan-cache entries retain only compact metadata, not page bodies.
+  return `${pageTitle.slice(0, 1000)} ${pageDesc.slice(0, 1000)}`.toLowerCase();
 }
 
 /**
  * Classifies a bookmark into a suggested folder based on its title,
- * URL, and page metadata. Returns null only if truly unclassifiable.
+ * URL, and page metadata. Uses a single manual fallback for uncertain classifications.
  */
 export function classifyBookmark(
   title: string,
   url: string,
   pageMetadata: string,
 ): string {
-  const text = `${title} ${url} ${pageMetadata}`.toLowerCase();
-
-  for (const rule of RULES) {
-    if (rule.keywords.some((kw) => text.includes(kw))) {
-      return rule.folder;
-    }
-  }
-
-  // Fallback: capitalize the main domain name as folder
+  let hostname = '';
+  let pathname = '';
   try {
-    const hostname = new URL(url).hostname.replace('www.', '');
-    const domain = hostname.split('.')[0];
-    // Skip generic subdomains
-    if (domain && domain.length > 2 && !['app', 'docs', 'drive', 'mail', 'web'].includes(domain)) {
-      return `📁 ${domain.charAt(0).toUpperCase() + domain.slice(1)}`;
-    }
-  } catch {
-    // malformed URL
+    const parsed = new URL(url);
+    hostname = parsed.hostname;
+    pathname = decodeURIComponent(parsed.pathname);
+  } catch { /* Titles can still be classified without a valid URL. */ }
+  const text = normalize(`${title} ${hostname} ${pathname} ${pageMetadata}`);
+  let winner: string | undefined;
+  let bestScore = 0;
+  for (const rule of COMPILED_RULES) {
+    const score = rule.patterns.filter(pattern => pattern.test(text)).length;
+    if (score > bestScore) { bestScore = score; winner = rule.folder; }
   }
+  if (winner) return winner;
 
+  // A folder for every unrecognized domain makes the library noisier.
   return '📁 Varios';
 }

@@ -14,11 +14,12 @@ export type Suggestion = {
 
 type Props = {
   suggestion: Suggestion;
+  disabled?: boolean;
   onAccept: (id: string, title: string, folder: string) => void;
   onDismiss: () => void;
 };
 
-export default function SuggestionCard({ suggestion, onAccept, onDismiss }: Props) {
+export default function SuggestionCard({ suggestion, onAccept, onDismiss, disabled }: Props) {
   const [title, setTitle] = useState(suggestion.suggestedTitle);
   const [folder, setFolder] = useState(suggestion.suggestedFolder);
 
@@ -74,12 +75,13 @@ export default function SuggestionCard({ suggestion, onAccept, onDismiss }: Prop
         <button
           className="btn btn--conjure btn--sm"
           onClick={() => onAccept(suggestion.id, title.trim(), folder.trim())}
-          disabled={!title.trim() || !folder.trim()}
+          disabled={disabled || !title.trim() || !folder.trim()}
         >
           🪄 Aplicar
         </button>
         <button
           className="btn btn--ghost btn--sm"
+          disabled={disabled}
           onClick={onDismiss}
         >
           Descartar

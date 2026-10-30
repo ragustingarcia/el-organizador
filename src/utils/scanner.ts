@@ -1,164 +1,98 @@
-// src/utils/scanner.ts
-
 import type { AnalyzedBookmark, HealthStatus } from './bookmarks';
 import { isUrlSafe } from './url-guard';
 import { extractMetadata, classifyBookmark } from './classifier';
 
-export type ScanOptions = {
-  validateLinks: boolean;
-  organize: boolean;
-};
-
-export type ScanResult = {
-  healthStatus: HealthStatus;
-  suggestedFolder?: string;
-};
-
+export type ScanOptions = { validateLinks: boolean; organize: boolean; enrichMetadata?: boolean };
+export type ScanResult = { healthStatus: HealthStatus; suggestedFolder?: string };
+type PageResult = { health: HealthStatus; metadata: string };
 const FETCH_TIMEOUT_MS = 8_000;
-const MAX_BODY_BYTES = 60_000; // Read at most ~60KB for metadata extraction
+export const MAX_BODY_BYTES = 60_000;
 
-/**
- * Performs a single network request that serves both URL health
- * validation and page classification. This avoids the original bug
- * of making 2 separate fetches per bookmark.
- *
- * Fixes applied:
- * - No `mode: 'no-cors'` (opaque responses hide real status → false positives)
- * - Redirect detection via `response.url !== originalUrl` (fetch follows
- *   redirects automatically, so status 3xx is never seen)
- * - URL safety check before any fetch (blocks private IPs, chrome://, etc.)
- * - Proper cancellation propagation via AbortSignal
- */
-async function fetchUrl(
-  url: string,
-  needsBody: boolean,
-  signal?: AbortSignal,
-): Promise<{ health: HealthStatus; body: string }> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-
-  // Link the external cancellation signal to our local controller
-  const onCancel = () => controller.abort();
-  signal?.addEventListener('abort', onCancel);
-
-  const cleanup = () => {
-    clearTimeout(timeout);
-    signal?.removeEventListener('abort', onCancel);
-  };
-
+async function readMetadata(response: Response): Promise<string> {
+  if (!response.body || !/^(text\/html|application\/xhtml\+xml)\b/i.test(response.headers.get('content-type') ?? '')) {
+    await response.body?.cancel();
+    return '';
+  }
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let remaining = MAX_BODY_BYTES;
+  let html = '';
   try {
-    // If we need the body (for classification), go straight to GET.
-    // Otherwise, try HEAD first (lighter).
-    const method = needsBody ? 'GET' : 'HEAD';
-
-    let response = await fetch(url, {
-      method,
-      signal: controller.signal,
-      redirect: 'follow',
-    });
-
-    // HEAD returned an error that isn't an auth wall → retry with GET
-    if (
-      !needsBody &&
-      !response.ok &&
-      response.status !== 401 &&
-      response.status !== 403
-    ) {
-      response = await fetch(url, {
-        method: 'GET',
-        signal: controller.signal,
-        redirect: 'follow',
-      });
+    while (remaining > 0) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const part = value.subarray(0, remaining);
+      remaining -= part.byteLength;
+      html += decoder.decode(part, { stream: true });
+      if (/<\/head\s*>/i.test(html)) break;
     }
-
-    cleanup();
-
-    // Redirect detection: fetch() follows redirects transparently,
-    // so we compare the final URL to the original.
-    const wasRedirected = response.url !== url;
-
-    // Extract metadata from body if needed
-    let body = '';
-    if (needsBody && response.ok) {
-      try {
-        const text = await response.text();
-        body = text.slice(0, MAX_BODY_BYTES);
-      } catch {
-        // Body read failure — not critical
-      }
-    }
-
-    // Classify the HTTP response
-    if (response.ok || response.status === 401 || response.status === 403) {
-      return {
-        health: wasRedirected ? 'redirected' : 'alive',
-        body,
-      };
-    }
-
-    if (response.status === 404 || response.status === 410) {
-      return { health: 'dead', body: '' };
-    }
-
-    // Any other 4xx/5xx — we're unsure, don't mark as dead
-    return { health: 'unverified', body: '' };
-  } catch (err: unknown) {
-    cleanup();
-
-    if (err instanceof DOMException && err.name === 'AbortError') {
-      // Was it the user who cancelled, or our timeout?
-      if (signal?.aborted) throw err; // User cancelled → propagate
-      return { health: 'timeout', body: '' };
-    }
-
-    // Network error (DNS failure, refused connection, etc.)
-    // Don't mark as dead — could be a transient issue
-    return { health: 'unverified', body: '' };
+    html += decoder.decode();
+    return extractMetadata(html);
+  } finally {
+    await reader.cancel().catch(() => {});
+    reader.releaseLock();
   }
 }
 
-/**
- * Scans a single bookmark: validates health and optionally classifies it.
- * A single fetch call is shared between both tasks.
- */
-export async function scanBookmark(
-  bookmark: AnalyzedBookmark,
-  options: ScanOptions,
-  signal?: AbortSignal,
-): Promise<ScanResult> {
-  // Block unsafe URLs before any network request
-  if (!isUrlSafe(bookmark.originalUrl)) {
-    return { healthStatus: 'blocked' };
+async function fetchPage(url: string, needsBody: boolean, signal?: AbortSignal): Promise<PageResult> {
+  signal?.throwIfAborted();
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  const onCancel = () => controller.abort();
+  signal?.addEventListener('abort', onCancel, { once: true });
+  try {
+    const request = (method: string) => fetch(url, {
+      method, signal: controller.signal,
+      // Location is hidden on browser manual redirects. Never follow an unchecked destination.
+      redirect: 'manual', credentials: 'omit', referrerPolicy: 'no-referrer',
+    });
+    let response = await request(needsBody ? 'GET' : 'HEAD');
+    if (!needsBody && [405, 501].includes(response.status)) {
+      await response.body?.cancel();
+      response = await request('GET');
+    }
+    if (response.type === 'opaqueredirect' || (response.status >= 300 && response.status < 400)) {
+      await response.body?.cancel();
+      return { health: 'redirected', metadata: '' };
+    }
+    const health: HealthStatus = response.ok || [401, 403].includes(response.status)
+      ? 'alive' : [404, 410].includes(response.status) ? 'dead' : 'unverified';
+    const metadata = needsBody && response.ok ? await readMetadata(response) : '';
+    if (!needsBody || !response.ok) await response.body?.cancel();
+    signal?.throwIfAborted();
+    return { health, metadata };
+  } catch {
+    signal?.throwIfAborted();
+    return { health: controller.signal.aborted ? 'timeout' : 'unverified', metadata: '' };
+  } finally {
+    clearTimeout(timeout);
+    signal?.removeEventListener('abort', onCancel);
   }
+}
 
-  // If neither validation nor organization is needed, nothing to do
-  if (!options.validateLinks && !options.organize) {
-    return { healthStatus: 'unverified' };
-  }
+/** One cache per scan, sharing requests, never bookmark-specific titles. */
+export function createBookmarkScanner(options: ScanOptions, signal?: AbortSignal) {
+  const requests = new Map<string, Promise<PageResult>>();
+  return async (bookmark: AnalyzedBookmark): Promise<ScanResult> => {
+    signal?.throwIfAborted();
+    if (!isUrlSafe(bookmark.originalUrl)) return { healthStatus: 'blocked' };
+    let page: PageResult = { health: 'pending', metadata: '' };
+    if (options.validateLinks || (options.organize && options.enrichMetadata)) {
+      const url = new URL(bookmark.originalUrl);
+      url.hash = '';
+      let pending = requests.get(url.href);
+      if (!pending) {
+        pending = fetchPage(url.href, !!(options.organize && options.enrichMetadata), signal);
+        requests.set(url.href, pending);
+      }
+      page = await pending;
+    }
+    const suggestedFolder = options.organize && !['dead', 'timeout', 'unverified', 'redirected'].includes(page.health)
+      ? classifyBookmark(bookmark.originalTitle, bookmark.originalUrl, page.metadata) : undefined;
+    return { healthStatus: page.health, suggestedFolder };
+  };
+}
 
-  // We need the body if organization is enabled (for metadata extraction)
-  const needsBody = options.organize;
-
-  const { health, body } = await fetchUrl(bookmark.originalUrl, needsBody, signal);
-
-  // The fetch already happened (needed for validation and/or classification),
-  // so its real result is always trustworthy — it must not be overwritten to
-  // 'unverified' just because the user didn't explicitly ask to validate.
-  const healthStatus = health;
-
-  // Only classify healthy bookmarks
-  let suggestedFolder: string | undefined;
-  if (
-    options.organize &&
-    (health === 'alive' || health === 'redirected')
-  ) {
-    const metadata = body ? extractMetadata(body) : '';
-    suggestedFolder = classifyBookmark(
-      bookmark.originalTitle,
-      bookmark.originalUrl,
-      metadata,
-    );
-  }
-
-  return { healthStatus, suggestedFolder };
+export async function scanBookmark(bookmark: AnalyzedBookmark, options: ScanOptions, signal?: AbortSignal): Promise<ScanResult> {
+  return createBookmarkScanner(options, signal)(bookmark);
 }

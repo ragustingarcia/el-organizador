@@ -2,8 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { suggestShortTitle } from './modifier';
 
 describe('suggestShortTitle', () => {
-  it('returns a placeholder for an empty title', () => {
-    expect(suggestShortTitle('')).toBe('Sin título');
+  it('does not invent a new title for an empty bookmark', () => {
+    expect(suggestShortTitle('')).toBe('');
   });
 
   it('leaves a title without separators untouched (only trimmed)', () => {
@@ -12,12 +12,18 @@ describe('suggestShortTitle', () => {
 
   // Documented examples from the source's own JSDoc — the leftmost
   // separator wins, instead of cascading through all of them.
-  it('splits at the leftmost separator', () => {
-    expect(suggestShortTitle('React Docs - Getting Started | React')).toBe('React Docs');
-    expect(suggestShortTitle('Stack Overflow - Where Developers Learn')).toBe('Stack Overflow');
+  it('preserves descriptive segments instead of truncating them', () => {
+    expect(suggestShortTitle('React Docs - Getting Started | React')).toBe('React Docs - Getting Started | React');
+    expect(suggestShortTitle('Stack Overflow - Where Developers Learn')).toBe('Stack Overflow - Where Developers Learn');
   });
 
   it('keeps the original title when the leading fragment would be too short', () => {
     expect(suggestShortTitle('AI - Home')).toBe('AI - Home');
   });
+});
+
+it('removes generic Home and Inicio suffixes only', () => {
+  expect(suggestShortTitle('Example - Home')).toBe('Example');
+  expect(suggestShortTitle('Example | Inicio')).toBe('Example');
+  expect(suggestShortTitle('AWS | Services - S3')).toBe('AWS | Services - S3');
 });

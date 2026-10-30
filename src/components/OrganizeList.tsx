@@ -1,3 +1,4 @@
+import PagedList from './PagedList';
 // src/components/OrganizeList.tsx
 
 import type { AnalyzedBookmark } from '../utils/bookmarks';
@@ -22,13 +23,13 @@ export default function OrganizeList({
       <h4 className="section-title" style={{ color: 'var(--gold-text)' }}>
         Sugerencias de organización ({bookmarks.length})
       </h4>
-      <div className="list-container list-container--organize">
-        {bookmarks.map((b) => (
+      <PagedList className="list-container--organize" items={bookmarks} renderItem={(b) => (
           <div key={b.id} className="list-item">
             <p className="list-item__title" style={{ color: 'var(--gold-text)' }}>
               {b.originalTitle || 'Sin título'}
             </p>
             <span className="list-item__url">{b.originalUrl}</span>
+            <span className="list-item__url">Origen: {b.originalPath.join(' > ')}</span>
             <div className="list-item__row">
               <input
                 type="checkbox"
@@ -48,8 +49,7 @@ export default function OrganizeList({
               />
             </div>
           </div>
-        ))}
-      </div>
+        )} />
     </div>
   );
 }
