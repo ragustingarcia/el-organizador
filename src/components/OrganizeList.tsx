@@ -29,6 +29,7 @@ export default function OrganizeList({
               {b.originalTitle || 'Sin título'}
             </p>
             <span className="list-item__url">{b.originalUrl}</span>
+            <p>{b.classificationReason} {b.classificationConfidence && `Evidencia: ${{ high: 'alta', medium: 'media', low: 'baja' }[b.classificationConfidence]}`}</p>
             <span className="list-item__url">Origen: {b.originalPath.join(' > ')}</span>
             <div className="list-item__row">
               <input

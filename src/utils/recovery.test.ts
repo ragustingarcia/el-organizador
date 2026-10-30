@@ -1,5 +1,5 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
-import { applyChangePlan, restoreRecovery, loadRecovery } from './recovery';
+import { applyChangePlan, restoreRecovery, loadRecovery, resumeRecovery, discardRecovery, pruneHistory } from './recovery';
 import type { Change } from './change-plan';
 
 type Node = chrome.bookmarks.BookmarkTreeNode;
@@ -52,7 +52,7 @@ beforeEach(() => {
       }),
     },
     storage: { local: {
-      get: (key: string, cb: (data: Record<string, unknown>) => void) => callback(cb, { [key]: store[key] }),
+      get: (key: string | null, cb: (data: Record<string, unknown>) => void) => callback(cb, key === null ? store : { [key]: store[key] }),
       set: (data: Record<string, unknown>, cb: () => void) => {
         if (!failStorage) Object.assign(store, structuredClone(data));
         callback(cb, undefined, failStorage ? 'Quota' : undefined);
@@ -132,4 +132,91 @@ it('does not overwrite a title edited after the move and before the rename', asy
   await expect(applyChangePlan([change()])).rejects.toThrow('antes de renombrarlo');
   expect(nodes.get('a')!.title).toBe('Manual edit during move');
   expect(api.bookmarks.update).not.toHaveBeenCalled();
+});
+
+it('reconciles a move completed before a failed rename without moving twice', async () => {
+  failRename = true;
+  await expect(applyChangePlan([change()])).rejects.toThrow();
+  const moves = api.bookmarks.move.mock.calls.length;
+  failRename = false;
+  await expect(resumeRecovery()).resolves.toBe(1);
+  expect(api.bookmarks.move).toHaveBeenCalledTimes(moves);
+  expect(nodes.get('a')!.title).toBe('a');
+  await expect(resumeRecovery()).resolves.toBe(1);
+  expect(api.bookmarks.move).toHaveBeenCalledTimes(moves);
+});
+it('restores independent bookmarks while retaining a conflicting one', async () => {
+  await applyChangePlan([change('a'), change('b')]);
+  nodes.get('b')!.title = 'Manual';
+  await expect(restoreRecovery()).rejects.toThrow('1 favoritos');
+  expect(nodes.get('a')).toMatchObject({ title: 'a - Home', parentId: 'bar' });
+  expect(nodes.get('b')!.title).toBe('Manual');
+  expect(await loadRecovery()).not.toBeNull();
+});
+it('does not reorder a bookmark moved manually after application', async () => {
+  await applyChangePlan([change()]); nodes.get('a')!.index = 42;
+  await expect(restoreRecovery()).rejects.toThrow('cambios posteriores');
+  expect(nodes.get('a')!.index).toBe(42);
+});
+it('rejects a malformed saved snapshot before writes', async () => {
+  store.recoverySnapshot = { version: 1, createdAt: 123, entries: [{ before: {}, after: {} }] };
+  await expect(restoreRecovery()).rejects.toThrow('inválida');
+  expect(api.bookmarks.move).not.toHaveBeenCalled();
+});
+
+it('uses independent progress keys for jobs created at the same instant', async () => {
+  vi.spyOn(Date, 'now').mockReturnValue(123456);
+  await applyChangePlan([change('a')]); const first = (await loadRecovery())!.id;
+  await discardRecovery();
+  await applyChangePlan([change('b')]);
+  expect((await loadRecovery())!.id).not.toBe(first);
+  expect(nodes.get('b')!.title).toBe('b');
+  vi.restoreAllMocks();
+});
+
+it('reconciles a successful mutation whose completion record could not be saved', async () => {
+  const local = (api.storage as { local: { set: (data: Record<string, unknown>, cb: () => void) => void } }).local;
+  const originalSet = local.set;
+  let fail = true;
+  local.set = (data, cb) => {
+    if (fail && Object.values(data).some(value => (value as { state?: string })?.state === 'verified')) {
+      fail = false; callback(cb, undefined, 'Interrupted before checkpoint'); return;
+    }
+    originalSet(data, cb);
+  };
+  await expect(applyChangePlan([change()])).rejects.toThrow('checkpoint');
+  const moves = api.bookmarks.move.mock.calls.length, renames = api.bookmarks.update.mock.calls.length;
+  await resumeRecovery();
+  expect(api.bookmarks.move).toHaveBeenCalledTimes(moves);
+  expect(api.bookmarks.update).toHaveBeenCalledTimes(renames);
+});
+it('keeps legacy snapshots recoverable without a journal', async () => {
+  store.recoverySnapshot = { version: 1, createdAt: 123, entries: [{ before: { id: 'a', title: 'a - Home', url: 'https://example.com/a', parentId: 'bar', index: 0 }, after: { title: 'a', parentId: 'bar' } }] };
+  nodes.get('a')!.title = 'a';
+  await restoreRecovery();
+  expect(nodes.get('a')!.title).toBe('a - Home');
+});
+
+it('history cleanup cannot remove the active job or its progress', async () => {
+ await applyChangePlan([change()]);
+ const active = (await loadRecovery())!;
+ const historyKey = `history:${active.id}`;
+ store[historyKey] = structuredClone(active);
+ await pruneHistory(0);
+ expect(store[historyKey]).toBeDefined();
+ expect(await loadRecovery()).not.toBeNull();
+ expect(store[`operation:${active.id}:a`]).toBeDefined();
+});
+
+it('resumes when its own later moves shifted an earlier completed sibling', async () => {
+ nodes.set('dest', { id: 'dest', title: 'Dest', parentId: 'bar', syncing: false });
+ nodes.get('b')!.parentId = 'dest'; nodes.get('b')!.index = 0;
+ const first = { ...change('a'), folder: undefined, destinationId: 'dest', targetParentId: 'dest' };
+ const second = { ...change('b'), folder: undefined, destinationId: 'bar', bookmark: { ...change('b').bookmark, originalParentId: 'dest' } };
+ const originalMove = api.bookmarks.move.getMockImplementation() as (...args: unknown[]) => unknown;
+ api.bookmarks.move.mockImplementation((...args: unknown[]) => { const result = originalMove(...args); if (args[0] === 'b') failRename = true; return result; });
+ await expect(applyChangePlan([first, second])).rejects.toThrow();
+ failRename = false;
+ await expect(resumeRecovery()).resolves.toBe(2);
+ expect(nodes.get('a')!.index).toBe(0);
 });

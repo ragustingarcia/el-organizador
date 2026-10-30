@@ -10,8 +10,10 @@ import {
 import { createBookmarkScanner, type ScanOptions } from './utils/scanner';
 import { poolMap } from './utils/pool';
 import { buildChangePlan, markDuplicates } from './utils/change-plan';
-import { applyChangePlan, loadRecovery, restoreRecovery, discardRecovery, type Recovery } from './utils/recovery';
+import { loadRecovery, listHistory, type Recovery } from './utils/recovery';
+import { runJob } from './utils/jobs-client';
 import ScanConfig, { type ScanActions } from './components/ScanConfig';
+import DomainRules from './components/DomainRules';
 import PagedList from './components/PagedList';
 import ProgressBar from './components/ProgressBar';
 import ResultsPanel from './components/ResultsPanel';
@@ -45,12 +47,13 @@ export default function App() {
   const [suggestion, setSuggestion] = useState<Suggestion | null>(null);
 
   const [recovery, setRecovery] = useState<Recovery | null>(null);
+  const [history, setHistory] = useState<{ key: string; createdAt: number; count: number }[]>([]);
   const [recoveryReady, setRecoveryReady] = useState(false);
   const busyRef = useRef(false);
   const abortRef = useRef<AbortController | null>(null);
 
   const refreshRecovery = useCallback(async () => {
-    try { setRecovery(await loadRecovery()); setRecoveryReady(true); }
+    try { setRecovery(await loadRecovery()); setHistory(await listHistory()); setRecoveryReady(true); }
     catch { setRecoveryReady(false); setError('No se pudo leer la copia de recuperación.'); }
   }, []);
 
@@ -67,19 +70,18 @@ export default function App() {
     });
 
     // Check for pending suggestion
-    chrome.storage.local.get<{ pendingSuggestions?: Suggestion[]; pendingSuggestion?: Suggestion }>(['pendingSuggestions', 'pendingSuggestion'], (data) => {
-      if (chrome.runtime.lastError) { setError('No se pudieron leer las sugerencias.'); return; }
-      setSuggestion(data.pendingSuggestions?.[0] ?? data.pendingSuggestion ?? null);
+    const refreshSuggestion = () => chrome.runtime.sendMessage({ type: 'GET_SUGGESTIONS' }, response => {
+      if (chrome.runtime.lastError || response?.error) { setError('No se pudieron leer las sugerencias.'); return; }
+      setSuggestion(response?.suggestions?.[0] ?? null);
     });
+    refreshSuggestion();
 
     // Listen for new suggestions while panel is open
     const listener = (
       changes: { [key: string]: chrome.storage.StorageChange },
       area: string,
     ) => {
-      if (area === 'local' && changes.pendingSuggestions) {
-        setSuggestion((changes.pendingSuggestions.newValue as Suggestion[] | undefined)?.[0] ?? null);
-      }
+      if (area === 'local' && Object.keys(changes).some(key => key.startsWith('suggestion:') || key.startsWith('pendingSuggestion'))) refreshSuggestion();
       if (area === 'local' && changes.vigiaEnabled) setVigiaEnabled(!!changes.vigiaEnabled.newValue);
       if (area === 'local' && changes.recoverySnapshot) {
         setRecovery((changes.recoverySnapshot.newValue as Recovery | undefined) ?? null);
@@ -113,7 +115,7 @@ export default function App() {
         if (!node || node.url !== suggestion.originalUrl || node.title !== suggestion.originalTitle || node.parentId !== suggestion.parentId) {
           throw new Error('El favorito cambió. Descartá esta sugerencia y volvé a escanear.');
         }
-        await applyChangePlan([{
+        await runJob('apply', [{
           bookmark: { id: node.id, originalTitle: node.title, originalUrl: node.url!, originalPath: [], originalParentId: node.parentId, healthStatus: 'pending' },
           title: newTitle || node.title, folder: folderName || undefined, targetParentId: suggestion.parentId,
         }]);
@@ -159,7 +161,7 @@ export default function App() {
 
   const updateSuggestedFolder = useCallback((id: string, folder: string) => {
     setBookmarks((prev) =>
-      prev.map((b) => (b.id === id ? { ...b, suggestedFolder: folder } : b)),
+      prev.map((b) => (b.id === id ? { ...b, suggestedFolder: folder, suggestedFolderId: undefined } : b)),
     );
   }, []);
 
@@ -167,6 +169,8 @@ export default function App() {
 
   const handleScan = async () => {
     if (busyRef.current) return;
+    const permission = actions.validateLinks || (actions.organize === 'suggest_folders' && actions.enrichMetadata)
+      ? chrome.permissions.request({ origins: ['http://*/*', 'https://*/*'] }) : Promise.resolve(true);
     busyRef.current = true;
     setPhase('scanning');
     setError(null);
@@ -177,6 +181,7 @@ export default function App() {
     abortRef.current = controller;
 
     try {
+      if (!await permission) throw new Error('Permiso web denegado. Desactivá las consultas web para organizar localmente.');
       const flatList = await getBookmarks(selectedFolderId);
       controller.signal.throwIfAborted();
       setProgress({ current: 0, total: flatList.length });
@@ -205,7 +210,12 @@ export default function App() {
         controller.signal,
       );
 
-      const results = markDuplicates(scanned);
+      const { organizationRules = {} } = await chrome.storage.local.get<{ organizationRules?: Record<string, string> }>('organizationRules');
+      const results = markDuplicates(scanned.map(bookmark => {
+        let host = ''; try { host = new URL(bookmark.originalUrl).hostname; } catch { /* invalid bookmark */ }
+        const target = folders.find(folder => folder.id === organizationRules[host]);
+        return target ? { ...bookmark, suggestedFolder: target.title, suggestedFolderId: target.id, classificationConfidence: 'high' as const, classificationReason: 'Regla personal para este dominio exacto.' } : bookmark;
+      }));
       const reviewSet = new Set<string>();
       const moveSet = new Set<string>();
 
@@ -218,7 +228,7 @@ export default function App() {
       for (const bm of results) {
         if (wasChecked && ['dead', 'timeout', 'unverified', 'blocked', 'redirected'].includes(bm.healthStatus)) {
           // Uncertain results are shown for review, never selected automatically.
-        } else if (bm.suggestedFolder && bm.suggestedFolder !== '📁 Varios' && !bm.duplicateOf && !bm.originalPath.includes('📥 Revisión Manual')) {
+        } else if (bm.suggestedFolder && bm.classificationConfidence === 'high' && (bm.suggestedFolderId || bm.originalParentId === (selectedFolderId === 'all' ? bm.rootId : selectedFolderId)) && bm.suggestedFolder !== '📁 Varios' && !bm.duplicateOf && !bm.originalPath.includes('📥 Revisión Manual')) {
           moveSet.add(bm.id);
         }
       }
@@ -232,7 +242,7 @@ export default function App() {
         return;
       }
       console.error('[El Organizador] Scan error:', err);
-      setError('Error durante el escaneo. Revisá la consola para más detalles.');
+      setError(err instanceof Error ? err.message : 'Error durante el escaneo.');
       setPhase('idle');
     } finally {
       abortRef.current = null;
@@ -246,7 +256,7 @@ export default function App() {
 
   // ---- Apply ----
 
-  const plan = buildChangePlan(bookmarks, selectedForReview, selectedForMove, actions.renameTitles, selectedFolderId);
+  const plan = buildChangePlan(bookmarks, selectedForReview, selectedForMove, actions.renameTitles, selectedFolderId, folders);
 
   const handleApply = async () => {
     if (busyRef.current || !plan.length) return;
@@ -255,7 +265,7 @@ export default function App() {
     setPhase('applying');
     setError(null);
     try {
-      await applyChangePlan(plan);
+      await runJob('apply', plan);
       setFolders(await getBookmarkFolders());
       setPhase('done');
     } catch (err) {
@@ -273,7 +283,7 @@ export default function App() {
     setPhase('applying');
     setError(null);
     try {
-      await restoreRecovery();
+      await runJob('restore');
       setBookmarks([]);
       setFolders(await getBookmarkFolders());
       setPhase('idle');
@@ -302,14 +312,41 @@ export default function App() {
         <p>Tu mago de favoritos</p>
       </div>
 
+      <div className="card">
+        <button className="btn btn--ghost" onClick={async () => {
+          try {
+            const tree = await chrome.bookmarks.getTree();
+            const url = URL.createObjectURL(new Blob([JSON.stringify({ version: 1, createdAt: Date.now(), tree }, null, 2)], { type: 'application/json' }));
+            const anchor = document.createElement('a'); anchor.href = url; anchor.download = 'el-organizador-respaldo.json'; anchor.click();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+          } catch { setError('No se pudo exportar el respaldo.'); }
+        }}>Exportar respaldo de favoritos (JSON)</button>
+        {history.length > 20 && <button className="btn btn--ghost" disabled={isLocked} onClick={async () => {
+          if (!window.confirm('¿Eliminar las copias archivadas más antiguas y conservar las 20 más recientes? El trabajo activo se conserva.')) return;
+          try { const response = await chrome.runtime.sendMessage({ type: 'BOOKMARK_JOB', action: 'prune' }); if (response?.error) throw new Error(response.error); await refreshRecovery(); }
+          catch (error) { setError(String(error)); }
+        }}>Liberar historial: conservar 20 copias</button>}
+        {!recovery && history.length > 0 && <select className="select" aria-label="Historial de limpieza" defaultValue="" disabled={isLocked} onChange={async event => {
+          const key = event.target.value; if (!key) return;
+          try { const response = await chrome.runtime.sendMessage({ type: 'BOOKMARK_JOB', action: 'reopen', key }); if (response?.error) throw new Error(response.error); await refreshRecovery(); }
+          catch (error) { setError(String(error)); }
+        }}><option value="">Revisar copia anterior…</option>{history.map(item => <option key={item.key} value={item.key}>{new Date(item.createdAt).toLocaleString()} · {item.count} favoritos</option>)}</select>}
+      </div>
       {recovery && (
         <div className="card">
-          <p>Hay una copia local de la última limpieza ({recovery.entries.length} favoritos). Las carpetas nuevas vacías se conservan al deshacer.</p>
+          <p>Hay una copia local de limpieza ({recovery.entries.length} favoritos). Las carpetas nuevas vacías se conservan al deshacer.</p>
+          {recovery.journal && <button className="btn btn--ghost" disabled={isLocked} onClick={async () => {
+            if (busyRef.current) return;
+            busyRef.current = true; setPhase('applying'); setError(null);
+            try { await runJob('resume'); setBookmarks([]); setPhase('done'); }
+            catch (error) { setError(String(error)); setPhase('idle'); }
+            finally { busyRef.current = false; await refreshRecovery(); }
+          }}>Reanudar trabajo interrumpido</button>}
           <button className="btn btn--ghost" disabled={isLocked} onClick={handleRestore}>Deshacer última limpieza</button>
           <button className="btn btn--ghost" disabled={isLocked} onClick={async () => {
-            if (!window.confirm('¿Conservar los cambios y descartar la copia para deshacer?')) return;
-            try { await discardRecovery(); setRecovery(null); } catch { setError('No se pudo descartar la copia.'); }
-          }}>Conservar cambios y descartar copia</button>
+            if (!window.confirm('¿Conservar los cambios y archivar la copia para deshacer?')) return;
+            try { await runJob('archive'); setRecovery(null); } catch { setError('No se pudo descartar la copia.'); }
+          }}>Conservar cambios y archivar copia</button>
         </div>
       )}
 
@@ -354,6 +391,7 @@ export default function App() {
         />
       )}
 
+      <DomainRules folders={folders} disabled={isLocked} />
       {/* Config */}
       <ScanConfig
         folders={folders}
@@ -403,6 +441,11 @@ export default function App() {
             showNetwork={actions.validateLinks || (actions.organize === 'suggest_folders' && actions.enrichMetadata)}
             selectedForReview={selectedForReview}
             selectedForMove={selectedForMove}
+            onKeepDuplicate={(ids, keeper) => setSelection(previous => {
+              const review = new Set(previous.review), move = new Set(previous.move);
+              for (const id of ids) { move.delete(id); if (id === keeper) review.delete(id); else review.add(id); }
+              return { review, move };
+            })}
             onToggleReview={toggleReview}
             onToggleMove={toggleMove}
             onFolderChange={updateSuggestedFolder}
@@ -414,6 +457,7 @@ export default function App() {
                 <p className="list-item__title">{change.bookmark.originalTitle}</p>
                 <span className="list-item__url">{change.bookmark.originalUrl}</span>
                 {change.title !== change.bookmark.originalTitle && <p>Nombre: {change.title}</p>}
+                {change.destinationId && <p>Destino: {folders.find(folder => folder.id === change.destinationId)?.fullPath}</p>}
                 {change.folder && <p>Destino: {folders.find(f => f.id === change.targetParentId)?.fullPath} &gt; {change.folder}</p>}
               </div>} />
             <button
@@ -444,6 +488,7 @@ export default function App() {
         <div className="card card--gold">
           <p style={{ margin: 0, textAlign: 'center', color: 'var(--gold-text)', fontSize: '13px' }}>
             ✨ Conjurando cambios...
+            <button className="btn btn--ghost" onClick={() => { void runJob('pause').catch(error => setError(String(error))); }}>Pausar después del favorito actual</button>
           </p>
         </div>
       )}

@@ -1,5 +1,16 @@
 # Registro de cambios
 
+## 1.4.0 — preparación de robustez (30 de octubre de 2026)
+
+- Ejecución en service worker, journal individual, verificación y reanudación por conciliación del árbol real.
+- Recuperación selectiva, detección de reordenamientos verificados, pausa entre favoritos, historial y exportación JSON.
+- Compatibilidad con copias anteriores; validación de registros e identidades de trabajos independientes.
+- Reglas personales de dominio exacto a carpeta existente, motivos y evidencia de clasificación, conservación de estructuras y revisión agrupada de duplicados.
+- Permisos web opcionales, consultas serializadas por dominio, espera ante 429 y caché limitada.
+- Sugerencias del Vigía almacenadas por identificador; migración de datos anteriores al modificarlos.
+- Pruebas de fallos de checkpoint, conflictos independientes, carga local de 50.000 favoritos y trabajo real de 100 cambios que sobrevive al cierre de la página iniciadora.
+
+
 ## 1.3.0 — preparación de actualización (30 de octubre de 2026)
 
 - Organización local por defecto; metadatos y verificación web opcionales.

@@ -20,12 +20,16 @@ export type AnalyzedBookmark = {
   duplicateOf?: string;
   healthStatus: HealthStatus;
   suggestedFolder?: string;
+  suggestedFolderId?: string;
+  classificationReason?: string;
+  classificationConfidence?: 'high' | 'medium' | 'low';
 };
 
 export type BookmarkFolder = {
   id: string;
   title: string;
   fullPath: string;
+  parentId?: string;
 };
 
 /**
@@ -113,6 +117,7 @@ export async function getBookmarkFolders(): Promise<BookmarkFolder[]> {
               folders.push({
                 id: node.id,
                 title: name,
+                parentId: node.parentId,
                 fullPath: newPath.join(' > '),
               });
             }

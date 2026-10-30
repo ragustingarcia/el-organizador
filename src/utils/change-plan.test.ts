@@ -27,10 +27,19 @@ describe('change plan', () => {
     expect(change.folder).toBe('📥 Revisión Manual'); expect(change.title).toBe('Example - Home');
   });
   it('does not nest category folders on repeated scans', () => {
-    expect(buildChangePlan([bookmark({ originalPath: ['Otros', 'Tema'], originalParentId: 'category', suggestedFolder: 'Tema' })], new Set(), new Set(['a']), false, 'all')).toEqual([]);
+    expect(buildChangePlan([bookmark({ originalPath: ['Otros', 'Tema'], originalParentId: 'category', suggestedFolder: 'Tema' })], new Set(), new Set(['a']), false, 'all', [{ id: 'category', title: 'Tema', parentId: '2', fullPath: 'Otros > Tema' }])).toEqual([]);
   });
   it('trims edited destination names and previews the actual rename', () => {
     const [change] = buildChangePlan([bookmark({ suggestedFolder: '  Tema  ' })], new Set(), new Set(['a']), true, '2');
     expect(change.folder).toBe('Tema'); expect(change.title).toBe('Example');
   });
+});
+
+it('does not equate homonymous folders belonging to different parents', () => {
+ const rows = [bookmark({ originalParentId: 'nested', originalPath: ['Project', 'Tema'], suggestedFolder: 'Tema' })];
+ expect(buildChangePlan(rows, new Set(), new Set(['a']), false, '2', [{ id: 'nested', parentId: 'project', title: 'Tema', fullPath: 'Project > Tema' }])).toHaveLength(1);
+});
+
+it('does not create a category inside itself when scanning that exact folder', () => {
+ expect(buildChangePlan([bookmark({ originalParentId: 'category', suggestedFolder: 'Tema' })], new Set(), new Set(['a']), false, 'category', [{ id: 'category', title: 'Tema', parentId: '2', fullPath: 'Otros > Tema' }])).toEqual([]);
 });

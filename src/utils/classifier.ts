@@ -126,11 +126,11 @@ export function extractMetadata(html: string): string {
  * Classifies a bookmark into a suggested folder based on its title,
  * URL, and page metadata. Uses a single manual fallback for uncertain classifications.
  */
-export function classifyBookmark(
+export function classifyDecision(
   title: string,
   url: string,
   pageMetadata: string,
-): string {
+): { folder: string; confidence: 'high' | 'medium' | 'low'; reason: string } {
   let hostname = '';
   let pathname = '';
   try {
@@ -141,12 +141,18 @@ export function classifyBookmark(
   const text = normalize(`${title} ${hostname} ${pathname} ${pageMetadata}`);
   let winner: string | undefined;
   let bestScore = 0;
+  let tied = false;
   for (const rule of COMPILED_RULES) {
     const score = rule.patterns.filter(pattern => pattern.test(text)).length;
-    if (score > bestScore) { bestScore = score; winner = rule.folder; }
+    if (score > bestScore) { bestScore = score; winner = rule.folder; tied = false; }
+    else if (score > 0 && score === bestScore) tied = true;
   }
-  if (winner) return winner;
+  if (winner) return { folder: winner, confidence: tied ? 'low' : bestScore >= 2 ? 'high' : 'medium', reason: tied ? 'Coincidencias en varias categorías; requiere revisión.' : `${bestScore} reglas coinciden con título, dominio, ruta o metadatos.` };
 
   // A folder for every unrecognized domain makes the library noisier.
-  return '📁 Varios';
+  return { folder: '📁 Varios', confidence: 'low', reason: 'No hay evidencia suficiente para una categoría.' };
+}
+
+export function classifyBookmark(title: string, url: string, metadata: string): string {
+  return classifyDecision(title, url, metadata).folder;
 }

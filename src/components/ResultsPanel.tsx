@@ -1,6 +1,7 @@
 // src/components/ResultsPanel.tsx
 
 import type { AnalyzedBookmark } from '../utils/bookmarks';
+import PagedList from './PagedList';
 import ReviewList from './ReviewList';
 import OrganizeList from './OrganizeList';
 
@@ -11,6 +12,7 @@ type Props = {
   showOrganize: boolean;
   selectedForReview: Set<string>;
   selectedForMove: Set<string>;
+  onKeepDuplicate?: (ids: string[], keeper: string) => void;
   onToggleReview: (id: string) => void;
   onToggleMove: (id: string) => void;
   onFolderChange: (id: string, folder: string) => void;
@@ -23,6 +25,7 @@ export default function ResultsPanel({
   showOrganize,
   selectedForReview,
   selectedForMove,
+  onKeepDuplicate,
   onToggleReview,
   onToggleMove,
   onFolderChange,
@@ -30,6 +33,14 @@ export default function ResultsPanel({
   // Mirrors the `wasChecked` guard in App.tsx: healthStatus is only
   // trustworthy if a fetch actually ran (validation and/or organize).
   const wasChecked = showNetwork;
+
+  const byId = new Map(bookmarks.map(bookmark => [bookmark.id, bookmark]));
+  const duplicateGroups = new Map<string, AnalyzedBookmark[]>();
+  for (const bookmark of bookmarks) {
+    if (!bookmark.duplicateOf || !byId.has(bookmark.duplicateOf)) continue;
+    const group = duplicateGroups.get(bookmark.duplicateOf) ?? [byId.get(bookmark.duplicateOf)!];
+    group.push(bookmark); duplicateGroups.set(bookmark.duplicateOf, group);
+  }
 
   const alive = bookmarks.filter(
     (b) => b.healthStatus === 'alive',
@@ -49,7 +60,7 @@ export default function ResultsPanel({
   const organizable = bookmarks.filter(
     (b) =>
       b.suggestedFolder &&
-      !['dead', 'timeout', 'unverified', 'blocked', 'redirected'].includes(b.healthStatus),
+      b.healthStatus !== 'blocked',
   );
 
   const nothingToDo =
@@ -89,6 +100,17 @@ export default function ResultsPanel({
         </div>
       )}
 
+      {duplicateGroups.size > 0 && <>
+        <h4>Duplicados exactos: elegí qué favorito conservar en su ubicación</h4>
+        <PagedList items={[...duplicateGroups.entries()]} renderItem={([id, group]) => <div key={id} className="list-item">
+          <p>{group[0].originalUrl} · {group.length} favoritos</p>
+          <PagedList items={group} renderItem={bookmark => <div key={bookmark.id} className="list-item">
+            <p>{bookmark.originalTitle} · {bookmark.originalPath.join(' > ')}</p>
+            <p>{selectedForReview.has(bookmark.id) ? 'Seleccionado para revisión' : 'Se conserva'}</p>
+            <button className="btn btn--ghost btn--sm" disabled={!onKeepDuplicate} onClick={() => onKeepDuplicate?.(group.map(item => item.id), bookmark.id)}>Conservar este y apartar las otras copias</button>
+          </div>} />
+        </div>} />
+      </>}
       {/* Problematic */}
       <ReviewList
         bookmarks={problematic}

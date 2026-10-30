@@ -16,7 +16,7 @@ describe('scanBookmark security and efficiency', () => {
   it('classifies locally without network and without claiming link health', async () => {
     const fetch = vi.fn(); vi.stubGlobal('fetch', fetch);
     const result = await scanBookmark(bm('https://github.com/test'), { validateLinks: false, organize: true });
-    expect(result).toEqual({ healthStatus: 'pending', suggestedFolder: '💻 Desarrollo' });
+    expect(result).toMatchObject({ healthStatus: 'pending', suggestedFolder: '💻 Desarrollo', classificationConfidence: 'medium' });
     expect(fetch).not.toHaveBeenCalled();
   });
   it('does nothing when all actions are off', async () => {
@@ -34,7 +34,7 @@ describe('scanBookmark security and efficiency', () => {
   it('recognizes opaque redirects without treating them as healthy', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ type: 'opaqueredirect', status: 0 }));
     const result = await scanBookmark(bm(), { ...options, organize: true });
-    expect(result.healthStatus).toBe('redirected'); expect(result.suggestedFolder).toBeUndefined();
+    expect(result.healthStatus).toBe('redirected'); expect(result.suggestedFolder).toBe('📁 Varios');
   });
   it.each([404, 410])('does not retry definitive missing status %s', async status => {
     const fetch = vi.fn().mockResolvedValue(new Response(null, { status })); vi.stubGlobal('fetch', fetch);
@@ -71,7 +71,7 @@ describe('scanBookmark security and efficiency', () => {
   it('extracts HTML metadata only after explicit opt-in', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('<title>Python</title></head>', { headers: { 'content-type': 'text/html' } })));
     const result = await scanBookmark(bm(), { validateLinks: false, organize: true, enrichMetadata: true });
-    expect(result).toEqual({ healthStatus: 'alive', suggestedFolder: '💻 Desarrollo' });
+    expect(result).toMatchObject({ healthStatus: 'alive', suggestedFolder: '💻 Desarrollo' });
   });
   it('does not parse non-HTML content as metadata', async () => {
     const cancel = vi.fn();
@@ -105,4 +105,14 @@ describe('scanBookmark security and efficiency', () => {
     } }), { headers: { 'content-type': 'text/html' } }))));
     await expect(scanBookmark(bm(), { ...options, organize: true, enrichMetadata: true }, controller.signal)).rejects.toMatchObject({ name: 'AbortError' });
   });
+});
+
+it('serializes same-domain requests and respects a 429 cooldown', async () => {
+  const fetch = vi.fn().mockResolvedValue(new Response(null, { status: 429, headers: { 'retry-after': '60' } }));
+  vi.stubGlobal('fetch', fetch);
+  const scan = createBookmarkScanner({ validateLinks: true, organize: true });
+  const [first, second] = await Promise.all([scan(bm('https://example.com/a', 'Python')), scan(bm('https://example.com/b', 'Python'))]);
+  expect(fetch).toHaveBeenCalledTimes(1);
+  expect(first.healthStatus).toBe('unverified'); expect(second.healthStatus).toBe('unverified');
+  expect(second.suggestedFolder).toBe('💻 Desarrollo');
 });

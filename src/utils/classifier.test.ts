@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { classifyBookmark, extractMetadata } from './classifier';
+import { classifyBookmark, classifyDecision, extractMetadata } from './classifier';
 
 describe('classifyBookmark', () => {
   it('matches a keyword in the title', () => {
@@ -70,4 +70,10 @@ it('weighs multiple relevant words instead of taking the first matching category
 it('bounds retained metadata for large libraries', () => {
   const html = `<title>${'a'.repeat(20_000)}</title><meta name="description" content="${'b'.repeat(20_000)}">`;
   expect(extractMetadata(html)).toHaveLength(2001);
+});
+
+it('explains weak evidence and ambiguity without inventing a probability', () => {
+  expect(classifyDecision('Python', 'https://example.com', '')).toMatchObject({ confidence: 'medium' });
+  expect(classifyDecision('Python Canva', 'https://example.com', '')).toMatchObject({ confidence: 'low' });
+  expect(classifyDecision('Python Docker', 'https://example.com', '')).toMatchObject({ confidence: 'high' });
 });

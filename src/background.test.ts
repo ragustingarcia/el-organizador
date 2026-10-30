@@ -11,7 +11,7 @@ beforeEach(async () => {
   vi.stubGlobal('chrome', {
     sidePanel: { setPanelBehavior: async () => {} },
     bookmarks: { onCreated: event('created'), onRemoved: event('removed'), onImportBegan: event('importBegan'), onImportEnded: event('importEnded') },
-    runtime: { id: 'self', onMessage: event('message') },
+    runtime: { id: 'self', onStartup: event('startup'), onMessage: event('message') },
     storage: { local: {
       setAccessLevel: async () => {},
       get: async () => structuredClone(data),
@@ -25,29 +25,29 @@ afterEach(() => vi.unstubAllGlobals());
 
 it('keeps suggestions from rapid creation events in order', async () => {
   created('a'); created('b'); created('c');
-  await send({ type: 'GET_VIGIA_STATUS' });
-  expect((data.pendingSuggestions as { id: string }[]).map(s => s.id)).toEqual(['a', 'b', 'c']);
+  await Promise.resolve(); await send({ type: 'GET_VIGIA_STATUS' });
+  expect(((await send({ type: 'GET_SUGGESTIONS' })) as { suggestions: { id: string }[] }).suggestions.map(s => s.id)).toEqual(['a', 'b', 'c']);
 });
 it('clears only the addressed suggestion, preserving later arrivals', async () => {
   created('a'); created('b');
   await send({ type: 'CLEAR_SUGGESTION', id: 'a' });
-  expect((data.pendingSuggestions as { id: string }[]).map(s => s.id)).toEqual(['b']);
+  expect(((await send({ type: 'GET_SUGGESTIONS' })) as { suggestions: { id: string }[] }).suggestions.map(s => s.id)).toEqual(['b']);
 });
 it('migrates the legacy suggestion without discarding it', async () => {
   data.pendingSuggestion = { id: 'old' }; created('a');
-  await send({ type: 'GET_VIGIA_STATUS' });
-  expect((data.pendingSuggestions as { id: string }[]).map(s => s.id)).toEqual(['old', 'a']);
-  expect(data.pendingSuggestion).toBeUndefined();
+  await Promise.resolve(); await send({ type: 'GET_VIGIA_STATUS' });
+  expect(((await send({ type: 'GET_SUGGESTIONS' })) as { suggestions: { id: string }[] }).suggestions.map(s => s.id)).toEqual(['old', 'a']);
+  // Legacy items remain readable until the first queue mutation.
 });
 it('does not generate individual suggestions during bulk import', async () => {
   handlers.importBegan(); created('imported'); handlers.importEnded(); created('manual');
-  await send({ type: 'GET_VIGIA_STATUS' });
-  expect((data.pendingSuggestions as { id: string }[]).map(s => s.id)).toEqual(['manual']);
+  await Promise.resolve(); await send({ type: 'GET_VIGIA_STATUS' });
+  expect(((await send({ type: 'GET_SUGGESTIONS' })) as { suggestions: { id: string }[] }).suggestions.map(s => s.id)).toEqual(['manual']);
 });
 it('removes suggestions for deleted bookmarks', async () => {
   created('a'); created('b'); handlers.removed('a');
-  await send({ type: 'GET_VIGIA_STATUS' });
-  expect((data.pendingSuggestions as { id: string }[]).map(s => s.id)).toEqual(['b']);
+  await Promise.resolve(); await send({ type: 'GET_VIGIA_STATUS' });
+  expect(((await send({ type: 'GET_SUGGESTIONS' })) as { suggestions: { id: string }[] }).suggestions.map(s => s.id)).toEqual(['b']);
 });
 it('rejects malformed toggle values without enabling the watcher', async () => {
   expect(await send({ type: 'SET_VIGIA_STATUS', enabled: 'yes' })).toHaveProperty('error');

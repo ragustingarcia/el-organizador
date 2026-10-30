@@ -1,10 +1,10 @@
 import type { AnalyzedBookmark, HealthStatus } from './bookmarks';
 import { isUrlSafe } from './url-guard';
-import { extractMetadata, classifyBookmark } from './classifier';
+import { extractMetadata, classifyDecision } from './classifier';
 
 export type ScanOptions = { validateLinks: boolean; organize: boolean; enrichMetadata?: boolean };
-export type ScanResult = { healthStatus: HealthStatus; suggestedFolder?: string };
-type PageResult = { health: HealthStatus; metadata: string };
+export type ScanResult = { healthStatus: HealthStatus; suggestedFolder?: string; classificationReason?: string; classificationConfidence?: 'high' | 'medium' | 'low' };
+type PageResult = { health: HealthStatus; metadata: string; retryAt?: number };
 const FETCH_TIMEOUT_MS = 8_000;
 export const MAX_BODY_BYTES = 60_000;
 
@@ -55,6 +55,12 @@ async function fetchPage(url: string, needsBody: boolean, signal?: AbortSignal):
       await response.body?.cancel();
       return { health: 'redirected', metadata: '' };
     }
+    if (response.status === 429) {
+      await response.body?.cancel();
+      const retry = response.headers.get('retry-after') ?? '';
+      const delay = /^\d+$/.test(retry) ? Number(retry) * 1000 : Date.parse(retry) - Date.now();
+      return { health: 'unverified', metadata: '', retryAt: Date.now() + Math.min(60000, Math.max(1000, Number.isFinite(delay) ? delay : 1000)) };
+    }
     const health: HealthStatus = response.ok || [401, 403].includes(response.status)
       ? 'alive' : [404, 410].includes(response.status) ? 'dead' : 'unverified';
     const metadata = needsBody && response.ok ? await readMetadata(response) : '';
@@ -72,6 +78,9 @@ async function fetchPage(url: string, needsBody: boolean, signal?: AbortSignal):
 
 /** One cache per scan, sharing requests, never bookmark-specific titles. */
 export function createBookmarkScanner(options: ScanOptions, signal?: AbortSignal) {
+  const tails = new Map<string, Promise<void>>();
+  const cooldown = new Map<string, number>();
+  const completed = new Set<string>();
   const requests = new Map<string, Promise<PageResult>>();
   return async (bookmark: AnalyzedBookmark): Promise<ScanResult> => {
     signal?.throwIfAborted();
@@ -82,14 +91,29 @@ export function createBookmarkScanner(options: ScanOptions, signal?: AbortSignal
       url.hash = '';
       let pending = requests.get(url.href);
       if (!pending) {
-        pending = fetchPage(url.href, !!(options.organize && options.enrichMetadata), signal);
+        const previous = tails.get(url.origin) ?? Promise.resolve();
+        pending = previous.then(async () => {
+          signal?.throwIfAborted();
+          if ((cooldown.get(url.origin) ?? 0) > Date.now()) return { health: 'unverified' as const, metadata: '' };
+          const result = await fetchPage(url.href, !!(options.organize && options.enrichMetadata), signal);
+          if (result.retryAt) cooldown.set(url.origin, result.retryAt);
+          return result;
+        });
+        const tail = pending.then(() => {}, () => {});
+        tails.set(url.origin, tail);
+        void tail.then(() => { if (tails.get(url.origin) === tail) tails.delete(url.origin); });
+        void pending.then(() => {
+          completed.add(url.href);
+          while (completed.size > 1000) { const oldest = completed.values().next().value!; completed.delete(oldest); requests.delete(oldest); }
+        }, () => {});
         requests.set(url.href, pending);
       }
       page = await pending;
     }
-    const suggestedFolder = options.organize && !['dead', 'timeout', 'unverified', 'redirected'].includes(page.health)
-      ? classifyBookmark(bookmark.originalTitle, bookmark.originalUrl, page.metadata) : undefined;
-    return { healthStatus: page.health, suggestedFolder };
+    const decision = options.organize ? classifyDecision(bookmark.originalTitle, bookmark.originalUrl, page.metadata) : undefined;
+    return { healthStatus: page.health, suggestedFolder: decision?.folder,
+      ...(decision ? { classificationReason: decision.reason, classificationConfidence: decision.confidence } : {}) };
+
   };
 }
 

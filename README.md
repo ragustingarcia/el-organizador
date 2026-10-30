@@ -10,7 +10,7 @@
 
 ## Instalación
 
-La versión publicada está en [Chrome Web Store](https://chromewebstore.google.com/detail/el-organizador/laaakmnbceahaobdmgjdcgefhijimiae). El código de esta rama prepara la versión **1.3.0**; su presencia en GitHub no implica que esa versión ya esté publicada en la tienda.
+La versión publicada está en [Chrome Web Store](https://chromewebstore.google.com/detail/el-organizador/laaakmnbceahaobdmgjdcgefhijimiae). El código de esta rama prepara la versión **1.4.0**; su presencia en GitHub no implica que esa versión ya esté publicada en la tienda.
 
 Para desarrollo (Node 22 actualizado):
 
@@ -22,6 +22,12 @@ npm run build
 ```
 
 En Chrome 114 o posterior, abrí `chrome://extensions/`, activá el modo de desarrollador y cargá la carpeta `dist/` como extensión sin empaquetar.
+
+## Trabajos recuperables en 1.4
+
+Los cambios se ejecutan en el service worker y siguen un registro persistente por favorito. Cerrar el panel no cancela el trabajo. Si el navegador o worker termina, se puede reanudar desde el panel: primero se compara el estado real con el esperado para evitar repetir cambios ya aplicados.
+
+El panel ofrece pausa entre favoritos, recuperación de los elementos compatibles, historial de copias archivadas y exportación JSON del árbol. Los conflictos conservan su copia. El historial puede liberarse manualmente conservando las veinte copias más recientes; el trabajo activo se protege. Las carpetas nuevas se conservan, incluso si una interrupción deja ambiguo el resultado de crearlas.
 
 ## Organización y limpieza
 
@@ -40,28 +46,32 @@ Las listas muestran 50 filas por página para mantener manejables bibliotecas gr
 
 “Verificar que los enlaces sigan vivos” y “Consultar metadatos web” contactan directamente los sitios guardados. Están desactivados por defecto. No se envían cookies ni referrer. Los metadatos solo se consultan al habilitar esa opción junto con la organización.
 
-- Se comparte una consulta por URL HTTP dentro de cada escaneo; los fragmentos no se envían al servidor.
+- Se comparten consultas por URL HTTP con una caché acotada a 1.000 resultados por escaneo; los fragmentos no se envían al servidor.
 - HEAD se utiliza cuando no hacen falta metadatos. GET solo lo reemplaza si HEAD no es compatible (405/501).
 - La lectura de HTML se limita a 60.000 bytes entregados al analizador y se cancela al alcanzar el límite o cerrar `head`. No se leen archivos binarios para clasificar.
 - El plazo de ocho segundos cubre tanto cabeceras como cuerpo. El usuario puede cancelar.
 - Las redirecciones no se siguen: su destino no se verifica y quedan para revisión. Un timeout o una redirección no se presentan como un enlace caído confirmado.
 - Ningún resultado problemático se selecciona automáticamente para mover.
 
+Las sugerencias muestran su evidencia y motivo. Solo se seleccionan automáticamente coincidencias fuertes sobre favoritos directamente contenidos en el ámbito elegido; se conservan las carpetas internas de proyectos. Las reglas personales de dominio exacto permiten elegir una carpeta existente por su identificador. Los duplicados se presentan agrupados para elegir cuál conservar y apartar las otras copias.
+
+Las consultas a un mismo dominio se serializan; un 429 respeta una espera acotada derivada de Retry-After. La clasificación local se conserva aunque falle una consulta web.
+
 ## Vigía Mágico
 
-Es opcional y clasifica localmente los favoritos nuevos. Las sugerencias se guardan en una cola, se muestran de a una y solo se retira la sugerencia aceptada o descartada. Durante una importación masiva se omiten sugerencias individuales; los importados se pueden revisar con un escaneo.
+Es opcional y clasifica localmente los favoritos nuevos. Las sugerencias se guardan como registros independientes por marcador, se muestran de a una y solo se retira la sugerencia aceptada o descartada. Durante una importación masiva se omiten sugerencias individuales; los importados se pueden revisar con un escaneo.
 
 El botón de la extensión abre el panel. El Vigía no intenta abrirlo automáticamente sin un gesto del usuario.
 
 ## Seguridad y privacidad
 
-Los permisos son `bookmarks`, `sidePanel`, `storage` y acceso HTTP/HTTPS para las consultas opcionales. No hay servidor propio, analítica ni código remoto. React y React DOM se incluyen en el paquete; no se cargan desde una CDN.
+Los permisos obligatorios son `bookmarks`, `sidePanel`, `storage` y el acceso HTTP/HTTPS se solicita como permiso opcional al activar consultas web. No hay servidor propio, analítica ni código remoto. React y React DOM se incluyen en el paquete; no se cargan desde una CDN.
 
 El guard de URLs rechaza esquemas ajenos a HTTP/HTTPS, credenciales incrustadas, nombres locales y rangos IP locales/especiales conocidos. **El filtro no resuelve DNS ni garantiza bloquear DNS rebinding.** La opción local permite organizar sin consultar sitios web.
 
-Las escrituras se serializan entre paneles con Web Locks, comprueban errores de Chrome y rechazan marcadores que cambiaron desde el escaneo. La recuperación se detiene ante conflictos en título, URL o carpeta y conserva la copia. Las APIs de Chrome no ofrecen una transacción atómica frente a cambios externos o sincronización concurrente.
+Las escrituras se serializan entre paneles con Web Locks, comprueban errores de Chrome y rechazan marcadores que cambiaron desde el escaneo. La recuperación aparta los conflictos en título, URL o carpeta y conserva la copia de los conflictos. Las APIs de Chrome no ofrecen una transacción atómica frente a cambios externos o sincronización concurrente.
 
-Consultá la [política de privacidad](./PRIVACY_POLICY.md), el [informe de auditoría](./docs/AUDITORIA-1.3.0.md) y el [registro de cambios](./CHANGELOG.md).
+Consultá la [implementación y límites de 1.4](./docs/ROBUSTEZ-1.4.md), la [política de privacidad](./PRIVACY_POLICY.md), el [informe de auditoría](./docs/AUDITORIA-1.4.0.md) y el [registro de cambios](./CHANGELOG.md).
 
 ## Arquitectura
 

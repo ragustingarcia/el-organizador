@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "El Organizador",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "Tu mago de favoritos. Audita, limpia y reorganiza tus marcadores.",
   "author": "Rodolfo Agustín García",
   "homepage_url": "https://ragustingarcia.com",
@@ -9,10 +9,6 @@
     "bookmarks",
     "sidePanel",
     "storage"
-  ],
-  "host_permissions": [
-    "http://*/*",
-    "https://*/*"
   ],
   "background": {
     "service_worker": "background.js"
@@ -36,5 +32,9 @@
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'none'; base-uri 'self'"
   },
-  "minimum_chrome_version": "114"
+  "minimum_chrome_version": "114",
+  "optional_host_permissions": [
+    "http://*/*",
+    "https://*/*"
+  ]
 }

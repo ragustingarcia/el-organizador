@@ -1,6 +1,6 @@
 # Política de privacidad — El Organizador
 
-**Última actualización: 30 de octubre de 2026. Versión 1.3.0.**
+**Última actualización: 30 de octubre de 2026. Versión 1.4.0.**
 
 ## Uso de los marcadores
 
@@ -26,7 +26,7 @@ No se trata de una navegación autenticada: un sitio que requiere iniciar sesió
 
 Los datos se guardan en el perfil del navegador. La extensión no los sube a un servidor. La propia sincronización de marcadores de Chrome, si el usuario la tiene habilitada, puede sincronizar las modificaciones realizadas a sus marcadores conforme a su configuración de Google.
 
-La copia de recuperación se borra al completar la recuperación o al elegir “Conservar cambios y descartar copia”. Las sugerencias se retiran al aceptarlas, descartarlas o al recibir el evento de eliminación del marcador. Desactivar el Vigía detiene nuevas sugerencias; no descarta automáticamente las pendientes. Al desinstalar la extensión, el navegador elimina su almacenamiento local; la copia no es un respaldo permanente.
+Las copias se archivan al completar la recuperación o al elegir conservar los cambios. El historial puede abrirse desde el panel y liberarse manualmente conservando las veinte copias más recientes. El trabajo activo no se elimina con esa limpieza. También se guardan estados de las operaciones y reglas personales de dominio a carpeta. El usuario puede exportar sus favoritos en JSON a un archivo de su elección. Las sugerencias se retiran al aceptarlas, descartarlas o al recibir el evento de eliminación del marcador. Desactivar el Vigía detiene nuevas sugerencias; no descarta automáticamente las pendientes. Al desinstalar la extensión, el navegador elimina su almacenamiento local; la copia no es un respaldo permanente.
 
 ## Permisos
 
@@ -35,7 +35,7 @@ La copia de recuperación se borra al completar la recuperación o al elegir “
 | `bookmarks` | Leer, mover y renombrar los marcadores seleccionados; crear carpetas y restaurar cambios |
 | `sidePanel` | Mostrar la interfaz en el panel lateral |
 | `storage` | Mantener preferencias, sugerencias y la copia local de recuperación |
-| `http://*/*`, `https://*/*` | Consultar los enlaces guardados cuando el usuario habilita funciones web |
+| `http://*/*`, `https://*/*` | Permiso opcional solicitado al habilitar consultas de enlaces guardados |
 
 No se utiliza acceso a archivos `file://`, historial de navegación, cookies ni credenciales del navegador. No hay content scripts inyectados en páginas web.
 
