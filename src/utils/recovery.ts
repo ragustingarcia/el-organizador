@@ -175,7 +175,7 @@ async function restore(): Promise<void> {
       const original = current.title === before.title && current.parentId === before.parentId;
       if (current.url !== before.url || ![before.title, after.title].includes(current.title) ||
         ![before.parentId, after.parentId].includes(current.parentId) ||
-        (!original && progress?.state === 'verified' && current.index !== progress.index)) throw new Error('conflict');
+        (!original && progress?.state === 'verified' && progress.index !== undefined && current.index !== progress.index)) throw new Error('conflict');
       const parent = await getNode(before.parentId);
       if (parent.url) throw new Error('Missing parent');
       compatible.push(entry);

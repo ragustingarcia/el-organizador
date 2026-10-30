@@ -25,7 +25,7 @@ El historial y las sugerencias se enumeran con lecturas del almacenamiento. Para
 
 ## Validación
 
-- 110 pruebas de lógica, componentes y APIs simuladas, incluidas interrupciones después de mover o después de completar una mutación pero antes de guardar su confirmación.
+- 111 pruebas de lógica, componentes y APIs simuladas, incluidas interrupciones después de mover o después de completar una mutación pero antes de guardar su confirmación.
 - Casos de recuperación con conflicto independiente, reordenamiento externo, copia antigua, snapshot inválido, colisiones de fecha, protección del trabajo activo y movimientos propios que desplazan índices de operaciones anteriores.
 - Prueba del núcleo local con 50.000 favoritos sintéticos, 1.000 URLs distintas y 49.000 duplicados; genera 1.000 movimientos seleccionados sin iniciar ninguna consulta web. El tiempo de una ejecución fue aproximadamente 1,2 segundos; no constituye una garantía para otros equipos ni mide interfaz o escrituras Chrome.
 - Lint, TypeScript, compilación del panel/service worker y comprobación de diferencias de Git.
@@ -45,3 +45,5 @@ El ensayo de navegador usa un perfil temporal y páginas de extensión a ancho d
 7. Falta CI remoto, revisión del diff completo antes de merge y publicación independiente en Chrome Web Store.
 
 Los archivos de la 1.3 se conservan como entrega anterior. La versión 1.4 es una implementación local para revisar, probar y continuar con los límites anteriores explícitos.
+
+Revisión previa al merge: corregida la recuperación de operaciones verificadas sin índice final cuando se interrumpe un favorito posterior. La prueba reproduce el fallo del segundo favorito y recupera ambos con su orden original.

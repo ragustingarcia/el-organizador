@@ -220,3 +220,16 @@ it('resumes when its own later moves shifted an earlier completed sibling', asyn
  await expect(resumeRecovery()).resolves.toBe(2);
  expect(nodes.get('a')!.index).toBe(0);
 });
+
+it('recovers verified entries after interruption before final index checkpoints', async () => {
+ const originalUpdate = api.bookmarks.update.getMockImplementation() as (...args: unknown[]) => unknown;
+ api.bookmarks.update.mockImplementation((id: string, input: unknown, cb: (node: Node) => void) => {
+   if (id === 'b') { callback(cb, nodes.get(id)!, 'Interrupted second bookmark'); return; }
+   return originalUpdate(id, input, cb);
+ });
+ await expect(applyChangePlan([change('a'), change('b')])).rejects.toThrow('Interrupted');
+ await restoreRecovery();
+ expect(nodes.get('a')).toMatchObject({ title: 'a - Home', parentId: 'bar', index: 0 });
+ expect(nodes.get('b')).toMatchObject({ title: 'b - Home', parentId: 'bar', index: 1 });
+ expect(await loadRecovery()).toBeNull();
+});
