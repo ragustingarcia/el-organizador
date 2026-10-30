@@ -40,3 +40,13 @@ describe('isUrlSafe', () => {
     expect(isUrlSafe('not a url')).toBe(false);
   });
 });
+
+it.each([
+  'http://localhost.', 'http://foo.localhost', 'http://printer.local', 'http://router',
+  'http://100.100.100.200', 'http://169.254.169.254', 'http://2130706433',
+  'http://0x7f000001', 'http://[::ffff:127.0.0.1]', 'http://[::ffff:192.168.1.1]',
+  'http://[fe90::1]', 'http://[ff02::1]', 'http://224.0.0.1',
+  'https://user:secret@example.com',
+])('rejects alternate local and special destinations %s', value => {
+  expect(isUrlSafe(value)).toBe(false);
+});

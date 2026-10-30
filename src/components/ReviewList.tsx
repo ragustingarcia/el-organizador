@@ -1,3 +1,4 @@
+import PagedList from './PagedList';
 // src/components/ReviewList.tsx
 
 import type { AnalyzedBookmark } from '../utils/bookmarks';
@@ -13,6 +14,7 @@ function statusLabel(status: string): string {
     case 'dead':       return 'Caído';
     case 'timeout':    return 'Sin respuesta';
     case 'blocked':    return 'Bloqueado';
+    case 'redirected': return 'Redirección sin verificar';
     case 'unverified': return 'Dudoso';
     default:           return status;
   }
@@ -31,11 +33,11 @@ export default function ReviewList({ bookmarks, selected, onToggle }: Props) {
       <h4 className="section-title">
         Enlaces para revisión ({bookmarks.length})
       </h4>
-      <div className="list-container">
-        {bookmarks.map((b) => (
+      <PagedList items={bookmarks} renderItem={(b) => (
           <div key={b.id} className="list-item">
             <p className="list-item__title">{b.originalTitle || 'Sin título'}</p>
             <span className="list-item__url">{b.originalUrl}</span>
+            <span className="list-item__url">Origen: {b.originalPath.join(' > ')}</span>
             <div className="list-item__row">
               <input
                 type="checkbox"
@@ -45,12 +47,11 @@ export default function ReviewList({ bookmarks, selected, onToggle }: Props) {
               />
               <span>Mover a "📥 Revisión Manual"</span>
               <span className={statusBadgeClass(b.healthStatus)}>
-                {statusLabel(b.healthStatus)}
+                {b.duplicateOf ? 'Duplicado exacto' : statusLabel(b.healthStatus)}
               </span>
             </div>
           </div>
-        ))}
-      </div>
+        )} />
     </div>
   );
 }

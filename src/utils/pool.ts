@@ -11,6 +11,8 @@ export async function poolMap<T, R>(
   onProgress?: (done: number, total: number) => void,
   signal?: AbortSignal,
 ): Promise<R[]> {
+  if (!Number.isInteger(concurrency) || concurrency < 1) throw new RangeError('Concurrency must be a positive integer');
+  signal?.throwIfAborted();
   const results: R[] = new Array(items.length);
   let nextIndex = 0;
   let doneCount = 0;

@@ -17,7 +17,7 @@ export async function findOrCreateFolder(
       }
 
       // Match exact title AND same parent AND it's a folder (no url)
-      const existing = results.find((r) => !r.url && r.parentId === parentId);
+      const existing = results.find((r) => !r.url && r.title === title && r.parentId === parentId);
       if (existing) {
         resolve(existing.id);
       } else {
@@ -66,42 +66,10 @@ export async function updateBookmarkTitle(
   });
 }
 
-/**
- * Shortens long page titles by splitting at the FIRST separator found.
- *
- * FIX: The original version cascaded through ALL separators, stripping
- * progressively more of the title. E.g. "AWS | Services - S3" became
- * "AWS" (split on " - " → "AWS | Services", then on " | " → "AWS").
- * Now we only split at the first (leftmost) separator we find, keeping
- * the most meaningful leading segment.
- *
- * Examples:
- *   "React Docs - Getting Started | React" → "React Docs"
- *   "Stack Overflow - Where Developers Learn" → "Stack Overflow"
- *   "Simple Title" → "Simple Title" (unchanged)
- */
+/** Remove generic landing-page suffixes, preserving descriptive title segments. */
 export function suggestShortTitle(originalTitle: string): string {
-  if (!originalTitle) return 'Sin título';
-
-  const separators = [' - ', ' | ', ' : ', ' • ', ' — '];
-
-  // Find the first separator that appears (leftmost position wins)
-  let earliestIndex = Infinity;
-  let winningSep = '';
-
-  for (const sep of separators) {
-    const idx = originalTitle.indexOf(sep);
-    if (idx !== -1 && idx < earliestIndex) {
-      earliestIndex = idx;
-      winningSep = sep;
-    }
-  }
-
-  if (winningSep) {
-    const cleaned = originalTitle.split(winningSep)[0].trim();
-    // Don't return empty or very short fragments
-    if (cleaned.length >= 3) return cleaned;
-  }
-
-  return originalTitle.trim();
+  const title = originalTitle.trim().replace(/\s+/g, ' ');
+  if (!title) return originalTitle;
+  const cleaned = title.replace(/\s(?:-|\||:|•|—)\s(?:home(?: page)?|inicio|página principal|sitio oficial|web oficial|official (?:site|website))$/i, '').trim();
+  return cleaned.length >= 3 ? cleaned : title;
 }
